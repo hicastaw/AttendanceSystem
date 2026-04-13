@@ -75,15 +75,9 @@ class FaceEngine:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         return cv2.Laplacian(gray, cv2.CV_64F).var()
     
-    def is_blurry(self, image, threshold):
+    def is_blurry(self, image, threshold=100.0):
         return self.calculate_shapeness(image) < threshold
     
-    def cosine_similarity_general(v1, v2):
-        dot_product = np.dot(v1, v2)
-        norm_v1 = np.linalg.norm(v1)
-        norm_v2 = np.linalg.norm(v2)
-        
-        if norm_v1 == 0 or norm_v2 == 0:
-            return 0.0
-            
-        return dot_product / (norm_v1 * norm_v2)
+    def calculate_similarity(self, v1, v2):
+        if v1 is None or v2 is None: return 0.0
+        return np.dot(v1, v2)
