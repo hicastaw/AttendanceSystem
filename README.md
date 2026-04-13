@@ -1,59 +1,34 @@
-🎓 Hệ Thống Điểm Danh Sinh Viên PTIT (Face Recognition Attendance)
-Dự án này là một hệ thống điểm danh tự động dựa trên nhận diện khuôn mặt thời gian thực, được phát triển nhằm mục đích tối ưu hóa việc quản lý sinh viên tại giảng đường. Hệ thống sử dụng các mô hình Deep Learning tiên tiến để đảm bảo độ chính xác và tốc độ xử lý trên các thiết bị laptop cá nhân như Asus ExpertBook.
+# 🎓 Hướng Dẫn Sử Dụng Hệ Thống Nhận Diện Khuôn Mặt (PTIT)
 
-🛠 Công Nghệ Sử Dụng (Technical Stack)
-Hệ thống được xây dựng trên nền tảng ngôn ngữ Python và các thư viện chuyên dụng:
+Hệ thống này thực hiện so sánh khuôn mặt từ Webcam thời gian thực với một ảnh thẻ có sẵn để đưa ra kết luận về danh tính sinh viên.
 
-OpenCV: Xử lý hình ảnh, điều khiển Webcam và hiển thị giao diện người dùng.
-
-ONNX Runtime: Thực thi các mô hình AI (.onnx) hiệu năng cao.
-
-NumPy: Tính toán đại số tuyến tính cho các vector đặc trưng (Embedding).
-
-YuNet: Mô hình phát hiện khuôn mặt (Face Detection) tốc độ cao.
-
-MobileFaceNet: Mô hình trích xuất đặc trưng khuôn mặt (Face Recognition) với vector 512 chiều.
- 
-🚀 Nguyên Lý Hoạt Động (The Pipeline)
-Luồng xử lý của file main_recognition.py bao gồm các bước sau:
-
-Khởi tạo Singleton Engine: FaceEngine được thiết lập theo mẫu thiết kế Singleton để đảm bảo các mô hình AI chỉ được nạp vào RAM một lần duy nhất, giúp tiết kiệm tài nguyên.
-
-Đăng ký dữ liệu mẫu: Hệ thống đọc ảnh thẻ sinh viên (vinh.jpg), căn chỉnh khuôn mặt (Align) và trích xuất vector đặc trưng Embedding 1.
-
-Quét mặt thời gian thực:
-
-Mở camera ở chế độ Full Screen để sinh viên dễ dàng quan sát.
-
-Liên tục bắt khung hình và sử dụng YuNet để tìm kiếm khuôn mặt.
-
-Kiểm tra độ mờ (Blurry check) bằng thuật toán Laplacian để đảm bảo chất lượng ảnh đầu vào.
-
-Đối soát (Verification):
-
-Trích xuất vector đặc trưng từ Camera.
-
-Sử dụng Cosine Similarity (thông qua NumPy) để so sánh vector camera với vector ảnh thẻ.
-
-Ra quyết định: Nếu độ tương đồng cao hơn 0.50, hệ thống xác nhận danh tính và in kết quả "Cùng một người".
-
-💻 Hướng Dẫn Cài Đặt
-Cài đặt môi trường ảo:
-
-Bash
-python -m venv .venv
-source .venv/bin/activate  # Trên Windows: .venv\Scripts\activate
-Cài đặt các thư viện:
-
-Bash
-pip install -r requirements.txt
-Chạy ứng dụng:
-
-Bash
+## 🛠 Hướng Dẫn Cấu Hình (Setup)
+Để chương trình hoạt động đúng ý muốn, cậu cần thực hiện bước quan trọng nhất là thiết lập **Ảnh đối chiếu (Reference Image):**
+1. **Chuẩn bị ảnh:** Đảm bảo cậu đã có một file ảnh rõ mặt (ví dụ: vinh.jpg hoặc hung.jpg) nằm cùng thư mục với file main_recognition.py.
+2. **Sửa đường dẫn trong code:** Mở file main_recognition.py, tìm dòng số 9 và thay đổi tên file ảnh của cậu vào:
+   VD: Thay "hung.jpg" bằng tên file ảnh của bạn
+   ```bash
+			img_path = "ten_anh_cua_ban.jpg"
+   ```
+🚀 Cách Chạy Chương TrìnhMở Terminal (hoặc CMD) tại thư mục dự án.Gõ lệnh sau để khởi động:
+```Bash
 python main_recognition.py
-📝 Lưu Ý
-Đảm bảo Webcam của bạn hoạt động bình thường và môi trường đủ ánh sáng.
+```
+3. **Hoạt động:** Một cửa sổ camera sẽ hiện lên ở chế độ Toàn màn hình (Full Screen).
+- Cậu hãy đứng trước webcam sao cho rõ mặt nhất.
+- Nhấn phím 'q' nếu muốn thoát chương trình thủ công.
 
-Tên file ảnh thẻ phải trùng khớp với biến img_path khai báo trong code.
+## 📊 Kết Quả Đầu Ra (Output)
+Sau khi AI trích xuất thành công khuôn mặt từ camera, nó sẽ tự động tính toán độ tương đồng dựa trên công thức **Cosine Similarity:**
 
-Nhấn phím 'q' để thoát khỏi màn hình điểm danh.
+$$\text{similarity} = \frac{\mathbf{v_1} \cdot \mathbf{v_2}}{\|\mathbf{v_1}\| \|\mathbf{v_2}\|}$$
+
+Kết quả sẽ được hiển thị ngay tại Terminal dưới hai dạng:
+| Dữ liệu hiển thị| Ý nghĩa | 
+| :-- | :-- |
+| Số thập phân (Ví dụ: 0.9245) | Chỉ số tương đồng giữa 2 khuôn mặt.|
+| "Cùng một người" | Xuất hiện nếu chỉ số Similarity > 0.50. |
+| "Khác người" | Xuất hiện nếu chỉ số Similarity <= 0.50. | 
+## ⚠️ Lưu Ý Quan Trọng
+1. Môi trường: Cần đủ ánh sáng để webcam bắt được đặc điểm khuôn mặt chính xác nhất.
+2. Thoát chương trình: Vòng lặp while sẽ tự động break ngay khi nhận diện thành công 1 frame ảnh từ camera.
