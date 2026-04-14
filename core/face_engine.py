@@ -30,6 +30,10 @@ class FaceEngine:
         
         return cls._instance
     
+    def __init__(self, pause_duration=2):
+        self.pause_unitl =  datetime.now()
+        self.pause_duration = timedelta(seconds=pause_duration)
+        
     def align_face(self, image, face_data):
         landmarks = face_data[4:14].reshape((5, 2)).astype(np.float32)
         
@@ -53,13 +57,11 @@ class FaceEngine:
         if face[-1] < 0.8:
             return None
         
-        
         aligned_face = self.align_face(image, face)
         
         if self.is_blurry(aligned_face, threshold=100.0):
             return None
-        
-       
+                
         blob = cv2.dnn.blobFromImage(aligned_face, 1.0/127.5, (112, 112), (127.5, 127.5, 127.5), swapRB=True)
 
         net_out = self.rec_session.run(None, {self.input_name: blob})[0]
@@ -78,6 +80,10 @@ class FaceEngine:
     def is_blurry(self, image, threshold=100.0):
         return self.calculate_shapeness(image) < threshold
     
-    def calculate_similarity(self, v1, v2):
-        if v1 is None or v2 is None: return 0.0
-        return np.dot(v1, v2)
+    def is_paused(self):
+        return datetime.now() < self.pause_unitl 
+    
+    def trigger_success(self):
+        self.pause_unitl = datetime.now() + self.pause_duration
+
+
