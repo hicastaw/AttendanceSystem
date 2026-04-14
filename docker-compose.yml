@@ -1,0 +1,79 @@
+services:
+
+  # ─── Database ──────────────────────────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: attendance_pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: attendance_db
+      POSTGRES_USER: attendance_user
+      POSTGRES_PASSWORD: attendance_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./backend/database/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U attendance_user -d attendance_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4:8
+    container_name: attendance_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    ports:
+      - "5050:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ─── AI Service (Python FastAPI) ───────────────────────────
+  ai:
+    build: ./backend/ai
+    container_name: attendance_ai
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+
+  # ─── Backend (Node.js Express) ─────────────────────────────
+  backend:
+    build: ./backend
+    container_name: attendance_backend
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: 3001
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: attendance_db
+      DB_USER: attendance_user
+      DB_PASSWORD: attendance_pass
+      AI_SERVICE_URL: http://ai:8001
+      UPLOAD_DIR: uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ai:
+        condition: service_started
+
+  # ─── Frontend (React + Vite) ────────────────────────────────
+  frontend:
+    build: ./frontend
+    container_name: attendance_frontend
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_BACKEND_URL: http://backend:3001
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:

@@ -31,10 +31,12 @@ BEGIN
 
     IF p_checkin_time IS NULL THEN
         RETURN 'absent';
-    ELSIF p_checkin_time < v_start_time THEN
+    ELSIF p_checkin_time < v_start_time AT TIME ZONE 'Asia/Ho_Chi_Minh' THEN
         RETURN 'early';
-    ELSIF p_checkin_time <= v_start_time + make_interval(mins => v_late_after_minutes) THEN
+    ELSIF p_checkin_time <= (v_start_time + make_interval(mins => v_late_after_minutes)) AT TIME ZONE 'Asia/Ho_Chi_Minh' THEN
         RETURN 'on_time';
+    ELSIF p_checkin_time > v_end_time AT TIME ZONE 'Asia/Ho_Chi_Minh' THEN
+        RETURN 'absent';
     ELSE
         RETURN 'late';
     END IF;
@@ -200,22 +202,11 @@ BEGIN
         RAISE EXCEPTION 'Attendance session % is not open', p_session_id;
     END IF;
 
-    SELECT EXISTS (
-        SELECT 1
-        FROM enrollments e
-        WHERE e.section_id = v_session.section_id
-          AND e.student_id = p_student_id
-    )
-    INTO v_is_enrolled;
-
-    IF NOT v_is_enrolled THEN
-        RAISE EXCEPTION 'Student % is not enrolled in session %', p_student_id, p_session_id;
-    END IF;
-
+    -- v_is_enrolled check removed for global attendance
     v_recognition_status := COALESCE(p_recognition_status, 'unknown');
 
     IF v_recognition_status = 'matched' THEN
-        IF COALESCE(p_confidence_score, 0) < 80 THEN
+        IF COALESCE(p_confidence_score, 0) < 60 THEN
             v_recognition_status := 'low_confidence';
             v_attendance_status := 'absent';
         ELSIF COALESCE(p_sharpness_score, 0) <= 100 THEN
