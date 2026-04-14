@@ -65,7 +65,6 @@ Chương trình sẽ mở webcam (nếu có) và hiển thị cửa sổ. Nhấn
 
 ## Ghi chú
 - Nếu gặp lỗi đọc ảnh (ví dụ OpenCV báo không mở được file), kiểm tra lại đường dẫn và quyền truy cập, hoặc thử di chuyển ảnh vào thư mục dự án để loại trừ vấn đề mã hóa tên file/OneDrive.
-- Ngưỡng nhận diện hiện mặc định là `0.50`; bạn có thể chỉnh trong mã nếu cần.
+- Ngưỡng nhận diện hiện mặc định là `0.50`; có thể chỉnh trong mã nếu cần.
 
----
-Nếu bạn muốn, tôi có thể cập nhật `main_recognition.py` để đọc ảnh an toàn hơn từ đường dẫn Unicode và in thông báo lỗi rõ ràng khi không đọc được ảnh.
+
