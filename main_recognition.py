@@ -1,53 +1,35 @@
-from core.face_engine import FaceEngine
 import cv2
-import numpy as np
+from core.face_engine import FaceEngine
+from core.ai_worker import AIWorker
 
 def main():
+    engine = FaceEngine()
+    worker = AIWorker(engine)
+    worker.start() 
+
     cap = cv2.VideoCapture(0)
-    face_engine = FaceEngine()
-
-    img_path = #file ảnh
-    img1 = cv2.imread(img_path)
-
-    embedding1 = face_engine.extract_face_embedding(img1)
-
     window_name = 'Điểm danh PTIT'
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-
     cv2.setWindowProperty(window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
 
-    if not cap.isOpened():
-        print("Lỗi: Không thể mở camera.")
-        return 
-    
+    current_match = None
+
     while cap.isOpened():
         ret, frame = cap.read()
-        if not ret:
-            print("Lỗi: Không thể đọc khung hình.")
-            return
-        
+        if not ret: break
+
+        worker.submit_frame(frame)
+
+        result = worker.get_result()
+        if result:
+            current_match = result
+            engine.trigger_success()
+
         cv2.imshow(window_name, frame)
-
-        if cv2.waitKey(10) & 0xFF == ord('q'):
-            break
-        
-        rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        embedding = face_engine.extract_face_embedding(rgb_image)
-        if embedding is not None:
-            break
-
-    similarity = face_engine.calculate_similarity(embedding, embedding1)
-
-    print(f"{similarity:.4f}")
-    if similarity > 0.50:
-        print("Cùng một người")
-    else:
-        print("Khác người")
+        if cv2.waitKey(1) & 0xFF == ord('q'): break
 
     cap.release()
     cv2.destroyAllWindows()
 
-        
-
 if __name__ == "__main__":
-    main() 
+    main()
