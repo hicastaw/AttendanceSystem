@@ -1,4 +1,4 @@
-from core import FaceEngine
+from core.face_engine import FaceEngine
 import cv2
 import numpy as np
 
