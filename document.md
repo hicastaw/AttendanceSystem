@@ -147,35 +147,133 @@ npm run dev
 
 ## API Endpoints
 
-### Students API (`/api/v1/students`)
+### 1. Students API (`/api/v1/students`)
 
-| Method | Endpoint | Mô tả |
-|---|---|---|
-| `GET` | `/students/classes` | Danh sách lớp hành chính |
-| `GET` | `/students` | Danh sách tất cả sinh viên |
-| `GET` | `/students/:code` | Thông tin 1 sinh viên |
-| `POST` | `/students/face/validate` | Upload + validate ảnh khuôn mặt (AI) |
-| `POST` | `/students/profile` | Lưu profile + embedding vào DB |
-| `PUT` | `/students/:code` | Cập nhật thông tin sinh viên |
+#### 1.1. Lấy danh sách lớp hành chính
+| EndPoint | `/api/v1/students/classes` |
+|---|---|
+| Method | `GET` |
+| Request | *Không có dữ liệu gửi kèm* |
+| Response (200 OK) | `{ "status": "success", "data": [ { "class_id": 1, "class_name": "D23CQCN01-B", "class_code": "D23CQCN01-B" } ] }` |
 
-### Attendance API (`/api/v1/attendance`)
+#### 1.2. Lấy danh sách tất cả sinh viên
+| EndPoint | `/api/v1/students` |
+|---|---|
+| Method | `GET` |
+| Request | *Không có dữ liệu gửi kèm* |
+| Response (200 OK) | `{ "status": "success", "data": [ { "student_id": 1, "student_code": "B23DCCN001", "full_name": "...", "class_name": "...", "has_face_profile": true } ] }` |
 
-| Method | Endpoint | Mô tả |
-|---|---|---|
-| `GET` | `/attendance/sections` | Danh sách học phần |
-| `GET` | `/attendance/sessions` | Danh sách phiên điểm danh |
-| `POST` | `/attendance/sessions` | Tạo phiên mới (draft) |
-| `PUT` | `/attendance/sessions/:id/open` | Mở phiên → gọi `open_attendance_session()` |
-| `PUT` | `/attendance/sessions/:id/close` | Đóng phiên → gọi `close_attendance_session()` |
-| `GET` | `/attendance/sessions/:id/records` | Kết quả điểm danh của phiên |
-| `POST` | `/attendance/recognize` | Nhận diện khuôn mặt từ frame camera |
+#### 1.3. Lấy thông tin 1 sinh viên
+| EndPoint | `/api/v1/students/:code` |
+|---|---|
+| Method | `GET` |
+| Request | Params: `code` (Ví dụ: `B23DCCN312`) |
+| Response (200 OK) | `{ "status": "success", "data": { "student_id": 1, "student_code": "B23DCCN312", "full_name": "Tran Trung Hieu", ... } }` |
+| Response (404 Lỗi) | `{ "status": "error", "message": "Không tìm thấy sinh viên." }` |
 
-### AI Service (`port 8001`)
+#### 1.4. Kiểm định AI (Pre-check)
+| EndPoint | `/api/v1/students/face/validate` |
+|---|---|
+| Method | `POST` |
+| Request | Headers: `Content-Type: multipart/form-data`<br>Body (Form-Data): `{ face_image: [File ảnh chân dung đính kèm] }` |
+| Response (200 OK) | `{ "status": "success", "message": "Ảnh hợp lệ", "data": { "face_path": "uploads/faces/1712345678-B23DCCN312.jpg", "embedding": [0.0123, -0.0456, "..."] } }` |
+| Response (400 Lỗi) | `{ "status": "error", "code": "BLURRY_IMAGE", "message": "Ảnh không phù hợp, yêu cầu chụp lại. (Độ sắc nét thấp)" }` |
 
-| Method | Endpoint | Mô tả |
-|---|---|---|
-| `POST` | `/ai/face/validate` | Validate ảnh đăng ký (strict: sharpness + embedding) |
-| `POST` | `/ai/face/extract` | Trích embedding từ frame (realtime, ít strict hơn) |
+#### 1.5. Lưu Hồ Sơ & Vector (Final Submit)
+| EndPoint | `/api/v1/students/profile` |
+|---|---|
+| Method | `POST` |
+| Request | Headers: `Content-Type: application/json`<br>Body JSON: `{ "student_code": "B23DCCN312", "full_name": "Tran Trung Hieu", "class_id": 1, "email": "hieu.tt@student.ptit.edu.vn", "face_path": "uploads/faces/1712345678-B23DCCN312.jpg", "embedding": [0.0123, -0.0456, "...", -0.0345] }` |
+| Response (200 OK) | `{ "status": "success", "message": "Đã lưu hồ sơ và dữ liệu khuôn mặt thành công", "data": { "student_id": 101, "student_code": "B23DCCN312" } }` |
+| Response (400 Lỗi) | `{ "status": "error", "message": "Dữ liệu không hợp lệ. Vui lòng kiểm định ảnh trước khi lưu hồ sơ." }` |
+
+#### 1.6. Cập nhật thông tin sinh viên
+| EndPoint | `/api/v1/students/:code` |
+|---|---|
+| Method | `PUT` |
+| Request | Body JSON: `{ "full_name": "...", "class_id": 1, "email": "...", "status": "active" }` |
+| Response (200 OK) | `{ "status": "success", "message": "Cập nhật thành công", "data": { ... } }` |
+
+---
+
+### 2. Attendance API (`/api/v1/attendance`)
+
+#### 2.1. Lấy danh sách học phần
+| EndPoint | `/api/v1/attendance/sections` |
+|---|---|
+| Method | `GET` |
+| Request | *Không có dữ liệu gửi kèm* |
+| Response (200 OK) | `{ "status": "success", "data": [ { "section_id": 1, "course_name": "...", "class_name": "..." } ] }` |
+
+#### 2.2. Lấy danh sách phiên điểm danh
+| EndPoint | `/api/v1/attendance/sessions` |
+|---|---|
+| Method | `GET` |
+| Request | Query Params (tuỳ chọn): `section_id` |
+| Response (200 OK) | `{ "status": "success", "data": [ { "session_id": 1, "session_title": "...", "status": "open" } ] }` |
+
+#### 2.3. Tạo phiên điểm danh mới (draft)
+| EndPoint | `/api/v1/attendance/sessions` |
+|---|---|
+| Method | `POST` |
+| Request | Body JSON: `{ "section_id": 1, "session_title": "...", "session_date": "2026-04-16", "start_time": "...", "end_time": "..." }` |
+| Response (201 OK) | `{ "status": "success", "data": { "session_id": 1, "status": "draft" } }` |
+
+#### 2.4. Mở phiên điểm danh
+| EndPoint | `/api/v1/attendance/sessions/:id/open` |
+|---|---|
+| Method | `PUT` |
+| Request | Params: `id` (ID của phiên điểm danh) |
+| Response (200 OK) | `{ "status": "success", "message": "Phiên điểm danh đã được mở.", "data": { ... } }` |
+
+#### 2.5. Đóng phiên điểm danh
+| EndPoint | `/api/v1/attendance/sessions/:id/close` |
+|---|---|
+| Method | `PUT` |
+| Request | Params: `id` (ID của phiên điểm danh) |
+| Response (200 OK) | `{ "status": "success", "message": "Phiên điểm danh đã được đóng.", "data": { ... } }` |
+
+#### 2.6. Tạo phiên điểm danh toàn cục (Global Session)
+| EndPoint | `/api/v1/attendance/global-sessions` |
+|---|---|
+| Method | `POST` |
+| Request | Body JSON: `{ "start_time": "07:00", "end_time": "11:00", "late_after_minutes": 15 }` |
+| Response (201 OK) | `{ "status": "success", "data": { "session_id": 2, "status": "open" } }` |
+
+#### 2.7. Lấy danh sách kết quả của phiên
+| EndPoint | `/api/v1/attendance/sessions/:id/records` |
+|---|---|
+| Method | `GET` |
+| Request | Params: `id` (ID của phiên điểm danh) |
+| Response (200 OK) | `{ "status": "success", "data": [ { "student_code": "B23DCCN312", "attendance_status": "on_time", "checkin_time": "..." } ] }` |
+
+#### 2.8. Nhận diện khuôn mặt từ camera (Camera realtime)
+| EndPoint | `/api/v1/attendance/recognize` |
+|---|---|
+| Method | `POST` |
+| Request | Headers: `Content-Type: multipart/form-data`<br>Body (Form-Data): `{ "frame": [File ảnh blob], "session_id": 1 }` |
+| Response (200 OK) | `{ "status": "success", "recognized": true, "data": { "student_code": "B23DCCN312", "full_name": "Tran Trung Hieu", "attendance_status": "on_time", "checkin_time": "2026-04-16T..." } }` |
+| Response (400 Lỗi) | `{ "status": "not_found", "message": "Không tìm thấy sinh viên trong hệ thống.", "recognized": false }` |
+
+---
+
+### 3. AI Service (`port 8001`)
+
+#### 3.1. Validate ảnh đăng ký (Strict mode)
+| EndPoint | `/ai/face/validate` |
+|---|---|
+| Method | `POST` |
+| Request | Headers: `Content-Type: multipart/form-data`<br>Body (Form-Data): `{ "face_image": [File ảnh] }` |
+| Response (200 OK) | `{ "is_valid": true, "message": "...", "sharpness_score": 120.5, "embedding": [...] }` |
+| Response (400 Lỗi) | `{ "is_valid": false, "error_code": "...", "message": "...", "sharpness_score": 50.0 }` |
+
+#### 3.2. Trích xuất embedding (Realtime mode)
+| EndPoint | `/ai/face/extract` |
+|---|---|
+| Method | `POST` |
+| Request | Headers: `Content-Type: multipart/form-data`<br>Body (Form-Data): `{ "face_image": [File ảnh] }` |
+| Response (200 OK) | `{ "found": true, "sharpness_score": 105.0, "embedding": [...] }` |
+| Response (400 Lỗi) | `{ "found": false, "message": "..." }` |
 
 ---
 
