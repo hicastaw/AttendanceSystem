@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ScanFace, BookUser, ChevronRight, Shield, Zap, BarChart3 } from 'lucide-react';
+import { ScanFace, BookUser, ChevronRight, Shield, Zap, BarChart3, LayoutDashboard } from 'lucide-react';
 
 export default function Home() {
   const features = [
@@ -42,6 +42,13 @@ export default function Home() {
             >
               <ScanFace className="w-5 h-5" />
               Bắt đầu điểm danh
+            </Link>
+            <Link
+              to="/teacher"
+              className="flex items-center justify-center gap-2 bg-black/20 backdrop-blur border-2 border-white/30 font-bold px-8 py-4 rounded-xl hover:bg-black/30 transition-all"
+            >
+              <LayoutDashboard className="w-5 h-5" />
+              Trang giáo viên
             </Link>
           </div>
         </div>

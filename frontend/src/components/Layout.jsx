@@ -1,5 +1,5 @@
 import { NavLink, Link } from 'react-router-dom';
-import { Camera, UserCircle, ScanFace, BookUser } from 'lucide-react';
+import { Camera, UserCircle, ScanFace, BookUser, LayoutDashboard } from 'lucide-react';
 
 export function Header() {
   return (
@@ -17,6 +17,19 @@ export function Header() {
 
         {/* Nav */}
         <nav className="hidden md:flex items-center gap-1">
+          <NavLink
+            to="/teacher"
+            className={({ isActive }) =>
+              `flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
+                isActive
+                  ? 'bg-primary-container text-white shadow-sm'
+                  : 'text-on-surface hover:bg-surface-container-low hover:text-primary-container'
+              }`
+            }
+          >
+            <LayoutDashboard className="w-4 h-4" />
+            Giáo viên
+          </NavLink>
           <NavLink
             to="/profile"
             className={({ isActive }) =>

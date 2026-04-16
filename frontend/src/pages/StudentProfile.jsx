@@ -1,11 +1,10 @@
-import { useState, useRef, useEffect } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import api from '../api/client.js';
 import {
   Search, Upload, CheckCircle2, XCircle, AlertCircle,
-  User, Mail, GraduationCap, Save, RefreshCw, Camera, Video
+  User, Mail, GraduationCap, Save, RefreshCw, Camera, Video, BookOpen, Users,
 } from 'lucide-react';
 
-// ─── Status Badge Component ──────────────────
 function AIBadge({ result }) {
   if (!result) return null;
   const isOk = result.is_valid;
@@ -33,7 +32,6 @@ function AIBadge({ result }) {
   );
 }
 
-// ─── Toast Component ─────────────────────────
 function Toast({ toast }) {
   if (!toast) return null;
   const isSuccess = toast.type === 'success';
@@ -46,7 +44,6 @@ function Toast({ toast }) {
   );
 }
 
-// ─── InputField Component ─────────────────────
 function InputField({ label, icon, id, ...props }) {
   return (
     <div>
@@ -67,7 +64,10 @@ function InputField({ label, icon, id, ...props }) {
   );
 }
 
-// ─── Main Page ────────────────────────────────
+function formatSection(section) {
+  return `${section.course_code} - ${section.course_name} • ${section.class_code} • ${section.schedule_note || 'Chưa có lịch'} • GV: ${section.lecturer_name}`;
+}
+
 export default function StudentProfile() {
   const [searchCode, setSearchCode] = useState('');
   const [loading, setLoading] = useState(false);
@@ -76,19 +76,53 @@ export default function StudentProfile() {
   const [toast, setToast] = useState(null);
 
   const [classes, setClasses] = useState([]);
+  const [allSections, setAllSections] = useState([]);
   const [form, setForm] = useState({ student_code: '', full_name: '', class_id: '', email: '' });
-  const [faceData, setFaceData] = useState(null);   // { face_path, embedding, sharpness_score }
-  const [aiResult, setAIResult] = useState(null);   // AI validate result
+  const [selectedSections, setSelectedSections] = useState([]);
+  const [faceData, setFaceData] = useState(null);
+  const [aiResult, setAIResult] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
+  const [existingImageUrl, setExistingImageUrl] = useState(null);
   const [cameraOn, setCameraOn] = useState(false);
+  const [searchSummary, setSearchSummary] = useState(null);
 
   const fileInputRef = useRef(null);
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
 
   useEffect(() => {
-    return () => stopCamera();
+    return () => {
+      stopCamera();
+      if (previewUrl?.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
+  useEffect(() => {
+    api.get('/students/classes').then(res => setClasses(res.data.data || []));
+    api.get('/students/course-sections').then(res => setAllSections(res.data.data || []));
   }, []);
+
+  useEffect(() => {
+    if (toast) {
+      const t = setTimeout(() => setToast(null), 3500);
+      return () => clearTimeout(t);
+    }
+  }, [toast]);
+
+  const showToast = (message, type = 'success') => setToast({ message, type });
+
+  const classSections = useMemo(() => {
+    if (!form.class_id) return [];
+    return allSections.filter(section => String(section.class_id) === String(form.class_id));
+  }, [allSections, form.class_id]);
+
+  useEffect(() => {
+    if (!form.class_id) {
+      setSelectedSections([]);
+      return;
+    }
+    setSelectedSections(prev => prev.filter(id => classSections.some(section => String(section.section_id) === String(id))));
+  }, [form.class_id, classSections]);
 
   const startCamera = async () => {
     try {
@@ -98,8 +132,7 @@ export default function StudentProfile() {
         await videoRef.current.play();
       }
       setCameraOn(true);
-      setPreviewUrl(null);
-    } catch (err) {
+    } catch {
       showToast('Không thể mở camera', 'error');
     }
   };
@@ -125,19 +158,6 @@ export default function StudentProfile() {
     }, 'image/jpeg', 0.9);
   };
 
-  // Load danh sách lớp khi mount
-  useEffect(() => {
-    api.get('/students/classes').then(res => setClasses(res.data.data || []));
-  }, []);
-
-  // Auto-hide toast
-  useEffect(() => {
-    if (toast) { const t = setTimeout(() => setToast(null), 3500); return () => clearTimeout(t); }
-  }, [toast]);
-
-  const showToast = (message, type = 'success') => setToast({ message, type });
-
-  // Tìm sinh viên theo mã
   const handleSearch = async () => {
     if (!searchCode.trim()) return;
     setLoading(true);
@@ -150,23 +170,43 @@ export default function StudentProfile() {
         class_id: String(d.class_id),
         email: d.email || '',
       });
+      setSelectedSections((d.enrollment_section_ids || []).map(String));
+      setSearchSummary({
+        hasFace: d.has_face_profile,
+        faceUpdatedAt: d.face_updated_at,
+        className: d.class_name,
+        enrolledSections: d.enrolled_sections || [],
+      });
       if (d.image_path) {
-        setPreviewUrl(`/uploads/${d.image_path.replace('uploads/', '')}`);
+        const url = `/uploads/${d.image_path.replace(/^uploads\//, '')}`;
+        setPreviewUrl(url);
+        setExistingImageUrl(url);
+      } else {
+        setPreviewUrl(null);
+        setExistingImageUrl(null);
       }
+      setFaceData(null);
+      setAIResult(null);
       showToast(`Đã tải thông tin: ${d.full_name}`);
     } catch (err) {
+      setSearchSummary(null);
+      setSelectedSections([]);
+      setPreviewUrl(null);
+      setExistingImageUrl(null);
       if (err.response?.status === 404) {
         setForm(prev => ({ ...prev, student_code: searchCode.trim().toUpperCase() }));
-        showToast('Sinh viên chưa có trong hệ thống. Điền thông tin để đăng ký.', 'error');
+        showToast('Sinh viên chưa có trong hệ thống. Điền thông tin và đăng ký học phần.', 'error');
       } else {
         showToast('Lỗi kết nối. Kiểm tra backend đang chạy.', 'error');
       }
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Upload ảnh và validate với AI
   const handleImageUpload = async (file) => {
     if (!file) return;
+    if (previewUrl?.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(URL.createObjectURL(file));
     setAIResult(null);
     setFaceData(null);
@@ -190,15 +230,22 @@ export default function StudentProfile() {
         message: d?.message || 'Lỗi không xác định',
         sharpness_score: d?.sharpness_score || 0,
       });
-    } finally { setValidating(false); }
+    } finally {
+      setValidating(false);
+    }
   };
 
-  // Lưu hồ sơ
+  const toggleSection = (sectionId) => {
+    setSelectedSections((prev) => prev.includes(String(sectionId))
+      ? prev.filter((id) => id !== String(sectionId))
+      : [...prev, String(sectionId)]);
+  };
+
   const handleSave = async () => {
-    if (!form.student_code || !form.full_name) {
-      return showToast('Vui lòng điền đủ: Mã SV, Họ tên', 'error');
+    if (!form.student_code || !form.full_name || !form.class_id) {
+      return showToast('Vui lòng điền đủ: Mã SV, Họ tên, Lớp hành chính', 'error');
     }
-    if (!faceData) {
+    if (!faceData && !existingImageUrl) {
       return showToast('Vui lòng upload và xác thực ảnh khuôn mặt trước.', 'error');
     }
     setSaving(true);
@@ -206,36 +253,49 @@ export default function StudentProfile() {
       await api.post('/students/profile', {
         student_code: form.student_code,
         full_name: form.full_name,
-        class_id: form.class_id ? parseInt(form.class_id) : null,
+        class_id: Number(form.class_id),
         email: form.email,
-        face_path: faceData.face_path,
-        embedding: faceData.embedding,
+        face_path: faceData?.face_path || null,
+        embedding: faceData?.embedding || null,
+        enrollment_section_ids: selectedSections.map(Number),
       });
-      showToast('Lưu hồ sơ thành công!');
+      showToast('Lưu hồ sơ và đăng ký học phần thành công!');
+      setSearchSummary((prev) => ({
+        ...(prev || {}),
+        className: classes.find(c => String(c.class_id) === String(form.class_id))?.class_name,
+        enrolledSections: classSections.filter(section => selectedSections.includes(String(section.section_id))),
+        hasFace: true,
+      }));
+      setExistingImageUrl(previewUrl || existingImageUrl);
       setFaceData(null);
       setAIResult(null);
     } catch (err) {
       showToast(err.response?.data?.message || 'Lỗi khi lưu hồ sơ.', 'error');
-    } finally { setSaving(false); }
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleReset = () => {
     setForm({ student_code: '', full_name: '', class_id: '', email: '' });
-    setFaceData(null); setAIResult(null); setPreviewUrl(null); setSearchCode('');
+    setSelectedSections([]);
+    setFaceData(null);
+    setAIResult(null);
+    setPreviewUrl(null);
+    setExistingImageUrl(null);
+    setSearchCode('');
+    setSearchSummary(null);
   };
 
   return (
     <main className="flex-grow bg-surface py-10 px-4 md:px-8">
       <Toast toast={toast} />
-      <div className="max-w-5xl mx-auto">
-
-        {/* Page Header */}
+      <div className="max-w-6xl mx-auto">
         <div className="mb-8">
           <h1 className="text-4xl font-black text-on-surface mb-2">Cập nhật thông tin sinh viên</h1>
-          <p className="text-secondary">Đăng ký hoặc cập nhật profile và dữ liệu khuôn mặt cho hệ thống điểm danh</p>
+          <p className="text-secondary">Đăng ký profile, ảnh khuôn mặt và học phần để tham gia đúng các phiên điểm danh giáo viên tạo.</p>
         </div>
 
-        {/* Search Bar */}
         <div className="bg-white rounded-2xl border border-outline-variant/30 shadow-sm p-6 mb-6">
           <label className="block text-xs font-bold text-secondary uppercase tracking-wider mb-2">
             Tìm kiếm theo mã sinh viên
@@ -261,25 +321,42 @@ export default function StudentProfile() {
               Tìm
             </button>
           </div>
+
+          {searchSummary && (
+            <div className="mt-5 grid grid-cols-1 lg:grid-cols-[140px_1fr] gap-4 items-start rounded-2xl border border-outline-variant/20 bg-surface-container-low p-4">
+              <div className="aspect-square rounded-xl overflow-hidden border bg-white">
+                {previewUrl ? (
+                  <img src={previewUrl} alt="Ảnh profile hiện tại" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-secondary text-xs text-center px-3">
+                    Chưa có ảnh preview
+                  </div>
+                )}
+              </div>
+              <div className="space-y-2">
+                <div className="flex flex-wrap gap-2 items-center">
+                  <span className="text-lg font-bold text-on-surface">{form.full_name || form.student_code}</span>
+                  <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${searchSummary.hasFace ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                    {searchSummary.hasFace ? 'Đã có ảnh khuôn mặt' : 'Chưa có hồ sơ khuôn mặt'}
+                  </span>
+                </div>
+                <p className="text-sm text-secondary">Lớp hiện tại: {searchSummary.className || 'Chưa có lớp'}</p>
+                <p className="text-sm text-secondary">Số học phần đã đăng ký: {searchSummary.enrolledSections?.length || 0}</p>
+                {searchSummary.faceUpdatedAt && (
+                  <p className="text-xs text-secondary">Ảnh cập nhật lần cuối: {new Date(searchSummary.faceUpdatedAt).toLocaleString('vi-VN')}</p>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Main Form */}
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-
-          {/* LEFT: Face Upload */}
           <div className="lg:col-span-2 space-y-4">
             <div className="bg-white rounded-2xl border border-outline-variant/30 shadow-sm p-6">
               <h2 className="text-sm font-bold text-secondary uppercase tracking-wider mb-4">Ảnh khuôn mặt</h2>
 
-              {/* Preview */}
-              <div
-                className="relative w-full aspect-square rounded-xl overflow-hidden bg-surface-container-low border-2 border-dashed border-outline-variant hover:border-primary-container transition-all group mb-4"
-              >
-                <video 
-                  ref={videoRef} 
-                  muted playsInline 
-                  className={`w-full h-full object-cover ${cameraOn ? 'block' : 'hidden'}`} 
-                />
+              <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-surface-container-low border-2 border-dashed border-outline-variant hover:border-primary-container transition-all group mb-4">
+                <video ref={videoRef} muted playsInline className={`w-full h-full object-cover ${cameraOn ? 'block' : 'hidden'}`} />
                 <canvas ref={canvasRef} className="hidden" />
 
                 {!cameraOn && previewUrl ? (
@@ -316,34 +393,21 @@ export default function StudentProfile() {
               />
 
               <div className="flex gap-2">
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex-1 flex items-center justify-center gap-2 border-2 border-outline-variant/50 text-secondary font-semibold py-3 rounded-lg hover:border-primary-container hover:text-primary-container transition-all text-sm"
-                >
-                  <Upload className="w-4 h-4" />
-                  Tải lên
+                <button onClick={() => fileInputRef.current?.click()} className="flex-1 flex items-center justify-center gap-2 border-2 border-outline-variant/50 text-secondary font-semibold py-3 rounded-lg hover:border-primary-container hover:text-primary-container transition-all text-sm">
+                  <Upload className="w-4 h-4" />Tải lên
                 </button>
                 {cameraOn ? (
-                  <button
-                    onClick={captureImage}
-                    className="flex-1 flex items-center justify-center gap-2 bg-blue-600 text-white font-semibold py-3 rounded-lg hover:bg-blue-700 transition-all text-sm"
-                  >
-                    <Camera className="w-4 h-4" />
-                    Chụp
+                  <button onClick={captureImage} className="flex-1 flex items-center justify-center gap-2 bg-blue-600 text-white font-semibold py-3 rounded-lg hover:bg-blue-700 transition-all text-sm">
+                    <Camera className="w-4 h-4" />Chụp
                   </button>
                 ) : (
-                  <button
-                    onClick={startCamera}
-                    className="flex-1 flex items-center justify-center gap-2 border-2 border-blue-200 text-blue-600 font-semibold py-3 rounded-lg hover:bg-blue-50 transition-all text-sm"
-                  >
-                    <Video className="w-4 h-4" />
-                    Webcam
+                  <button onClick={startCamera} className="flex-1 flex items-center justify-center gap-2 border-2 border-blue-200 text-blue-600 font-semibold py-3 rounded-lg hover:bg-blue-50 transition-all text-sm">
+                    <Video className="w-4 h-4" />Webcam
                   </button>
                 )}
               </div>
             </div>
 
-            {/* AI Feedback */}
             {validating && (
               <div className="bg-white rounded-xl border border-outline-variant/30 p-4 flex items-center gap-3">
                 <RefreshCw className="w-5 h-5 text-primary-container animate-spin" />
@@ -353,32 +417,15 @@ export default function StudentProfile() {
             <AIBadge result={aiResult} />
           </div>
 
-          {/* RIGHT: Info Form */}
           <div className="lg:col-span-3 bg-white rounded-2xl border border-outline-variant/30 shadow-sm p-6">
-            <h2 className="text-sm font-bold text-secondary uppercase tracking-wider mb-6">Thông tin sinh viên</h2>
+            <h2 className="text-sm font-bold text-secondary uppercase tracking-wider mb-6">Thông tin sinh viên & đăng ký học phần</h2>
 
             <div className="space-y-5">
-              <InputField
-                label="Mã sinh viên *"
-                id="student_code"
-                icon={<GraduationCap className="w-4 h-4" />}
-                value={form.student_code}
-                onChange={e => setForm(p => ({ ...p, student_code: e.target.value.toUpperCase() }))}
-                placeholder="VD: B23DCCN312"
-              />
-              <InputField
-                label="Họ và tên *"
-                id="full_name"
-                icon={<User className="w-4 h-4" />}
-                value={form.full_name}
-                onChange={e => setForm(p => ({ ...p, full_name: e.target.value }))}
-                placeholder="VD: Trần Trung Hiếu"
-              />
+              <InputField label="Mã sinh viên *" id="student_code" icon={<GraduationCap className="w-4 h-4" />} value={form.student_code} onChange={e => setForm(p => ({ ...p, student_code: e.target.value.toUpperCase() }))} placeholder="VD: B23DCCN312" />
+              <InputField label="Họ và tên *" id="full_name" icon={<User className="w-4 h-4" />} value={form.full_name} onChange={e => setForm(p => ({ ...p, full_name: e.target.value }))} placeholder="VD: Trần Trung Hiếu" />
 
-              {/* <div className="hidden">
-                <label className="block text-xs font-bold text-secondary uppercase tracking-wider mb-2">
-                  Lớp hành chính *
-                </label>
+              <div>
+                <label className="block text-xs font-bold text-secondary uppercase tracking-wider mb-2">Lớp hành chính *</label>
                 <select
                   id="class_id"
                   value={form.class_id}
@@ -387,44 +434,74 @@ export default function StudentProfile() {
                 >
                   <option value="">-- Chọn lớp --</option>
                   {classes.map(c => (
-                    <option key={c.class_id} value={c.class_id}>{c.class_name}</option>
+                    <option key={c.class_id} value={c.class_id}>{c.class_name} ({c.class_code})</option>
                   ))}
                 </select>
-              </div> */}
+              </div>
 
-              <InputField
-                label="Email"
-                id="email"
-                icon={<Mail className="w-4 h-4" />}
-                type="email"
-                value={form.email}
-                onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
-                placeholder="VD: hieu.tt@student.ptit.edu.vn"
-              />
+              <InputField label="Email" id="email" icon={<Mail className="w-4 h-4" />} type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} placeholder="VD: hieu.tt@student.ptit.edu.vn" />
+
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <BookOpen className="w-4 h-4 text-secondary" />
+                  <label className="block text-xs font-bold text-secondary uppercase tracking-wider">Đăng ký học phần của lớp</label>
+                </div>
+                <p className="text-xs text-secondary mb-3">Các học phần đã chọn sẽ là cơ sở để giáo viên tạo phiên điểm danh và để sinh viên nhìn thấy đúng phiên của mình ở trang scan.</p>
+
+                {!form.class_id ? (
+                  <div className="rounded-xl border border-dashed border-outline-variant/50 p-4 text-sm text-secondary bg-surface-container-low">
+                    Chọn lớp hành chính trước để hiện danh sách học phần phù hợp.
+                  </div>
+                ) : classSections.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-outline-variant/50 p-4 text-sm text-secondary bg-surface-container-low">
+                    Lớp này hiện chưa có học phần để đăng ký.
+                  </div>
+                ) : (
+                  <div className="space-y-3 max-h-72 overflow-auto pr-1">
+                    {classSections.map(section => {
+                      const checked = selectedSections.includes(String(section.section_id));
+                      return (
+                        <label key={section.section_id} className={`flex items-start gap-3 rounded-xl border p-4 cursor-pointer transition-all ${checked ? 'border-primary-container bg-primary-container/5' : 'border-outline-variant/30 hover:border-primary-container/40'}`}>
+                          <input type="checkbox" checked={checked} onChange={() => toggleSection(section.section_id)} className="mt-1" />
+                          <div className="min-w-0">
+                            <div className="font-semibold text-on-surface">{section.course_code} - {section.course_name}</div>
+                            <div className="text-sm text-secondary mt-1">{section.schedule_note || 'Chưa có ghi chú lịch học'} • GV: {section.lecturer_name}</div>
+                            <div className="text-xs text-secondary mt-1 flex items-center gap-2">
+                              <Users className="w-3.5 h-3.5" />
+                              Đã có {section.enrolled_count} sinh viên đăng ký
+                            </div>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {selectedSections.length > 0 && (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                  <p className="text-sm font-bold text-emerald-700 mb-2">Học phần đã chọn ({selectedSections.length})</p>
+                  <div className="space-y-2 text-xs text-emerald-800">
+                    {classSections.filter(section => selectedSections.includes(String(section.section_id))).map(section => (
+                      <div key={section.section_id}>{formatSection(section)}</div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Lưu ý */}
             {!faceData && (
               <div className="mt-6 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
                 <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
-                <p className="text-xs text-amber-700">Upload và xác thực ảnh khuôn mặt trước khi lưu hồ sơ.</p>
+                <p className="text-xs text-amber-700">Cần có hồ sơ khuôn mặt hợp lệ trước khi lưu. Nếu sinh viên đã có ảnh trong hệ thống, bạn có thể chỉ cập nhật lớp và học phần mà không cần tải lại ảnh.</p>
               </div>
             )}
 
-            {/* Action Buttons */}
             <div className="flex gap-3 mt-6">
-              <button
-                onClick={handleReset}
-                className="flex items-center gap-2 border border-outline-variant/50 text-secondary font-semibold px-5 py-3 rounded-lg hover:bg-surface-container-low transition-all text-sm"
-              >
-                <RefreshCw className="w-4 h-4" />
-                Reset
+              <button onClick={handleReset} className="flex items-center gap-2 border border-outline-variant/50 text-secondary font-semibold px-5 py-3 rounded-lg hover:bg-surface-container-low transition-all text-sm">
+                <RefreshCw className="w-4 h-4" />Reset
               </button>
-              <button
-                onClick={handleSave}
-                disabled={saving || !faceData || !aiResult?.is_valid}
-                className="flex-1 flex items-center justify-center gap-2 bg-primary-container text-white font-bold py-3 rounded-lg hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-all text-sm shadow-sm"
-              >
+              <button onClick={handleSave} disabled={saving || (!faceData && !existingImageUrl) || (!!faceData && !aiResult?.is_valid)} className="flex-1 flex items-center justify-center gap-2 bg-primary-container text-white font-bold py-3 rounded-lg hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-all text-sm shadow-sm">
                 {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 {saving ? 'Đang lưu...' : 'Lưu hồ sơ'}
               </button>
