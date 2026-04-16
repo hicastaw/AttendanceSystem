@@ -1,0 +1,72 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-headline: "Inter", sans-serif;
+
+  /* Brand colors — PTIT Red */
+  --color-primary: #a7000c;
+  --color-primary-container: #ce1e1e;
+  --color-on-primary: #ffffff;
+
+  /* Surface colors */
+  --color-surface: #f9f9f9;
+  --color-surface-container-low: #f3f3f3;
+  --color-surface-container-lowest: #ffffff;
+
+  /* Text */
+  --color-on-surface: #1a1c1c;
+  --color-secondary: #5d5f5f;
+
+  /* Outline */
+  --color-outline-variant: #e5bdb8;
+}
+
+@layer base {
+  html {
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-surface text-on-surface antialiased;
+    font-family: "Inter", sans-serif;
+  }
+
+  h1, h2, h3, h4 {
+    @apply font-sans font-extrabold tracking-tight;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #f3f3f3; }
+::-webkit-scrollbar-thumb { background: #e5bdb8; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #ce1e1e; }
+
+/* Camera overlay animation */
+@keyframes scan-line {
+  0% { transform: translateY(-100%); opacity: 0; }
+  20% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { transform: translateY(100vh); opacity: 0; }
+}
+
+.scan-line {
+  animation: scan-line 3s ease-in-out infinite;
+}
+
+/* Pulse border animation for active scanning */
+@keyframes pulse-border {
+  0%, 100% { border-color: rgba(206, 30, 30, 0.8); box-shadow: 0 0 0 0 rgba(206, 30, 30, 0.4); }
+  50% { border-color: rgba(206, 30, 30, 1); box-shadow: 0 0 0 8px rgba(206, 30, 30, 0); }
+}
+
+.border-pulse {
+  animation: pulse-border 2s ease-in-out infinite;
+}
