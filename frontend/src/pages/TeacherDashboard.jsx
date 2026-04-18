@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import api from '../api/client.js';
 import {
   LayoutDashboard,
@@ -9,7 +8,6 @@ import {
   Square,
   RefreshCw,
   Search,
-  Camera,
   GraduationCap,
   FileDown,
   Plus,
@@ -20,6 +18,12 @@ import {
   Filter,
   Eye,
   BookOpen,
+  User,
+  Mail,
+  Save,
+  X,
+  UserPlus,
+  Layers,
 } from 'lucide-react';
 
 const tabs = [
@@ -115,6 +119,27 @@ export default function TeacherDashboard() {
     late_after_minutes: 15,
   });
 
+  // ── Lecturer profile modal ─────────────────────────────────────────────────
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [modalTab, setModalTab] = useState('profile'); // 'profile' | 'my-sections' | 'register'
+  const [lecturerList, setLecturerList] = useState([]);
+  const [lecturerCode, setLecturerCode] = useState('');
+  const [lecturerInfo, setLecturerInfo] = useState(null);
+  const [lecturerForm, setLecturerForm] = useState({ full_name: '', email: '' });
+  const [lecturerSaving, setLecturerSaving] = useState(false);
+  const [lecturerLoading, setLecturerLoading] = useState(false);
+  const [lecturerFound, setLecturerFound] = useState(false);
+  const lecturerCodeRef = useRef(null);
+  // sections state
+  const [mySections, setMySections] = useState([]);
+  const [mySectionsLoading, setMySectionsLoading] = useState(false);
+  const [availableSections, setAvailableSections] = useState([]);
+  const [availLoading, setAvailLoading] = useState(false);
+  const [availSearch, setAvailSearch] = useState('');
+  const [availFilter, setAvailFilter] = useState('all'); // 'all' | 'mine' | 'other'
+  const [registeringId, setRegisteringId] = useState(null);
+
+  // ── Notifications ─────────────────────────────────────────────────────────
   const notify = (text, type = 'success') => {
     setMessage({ text, type });
     window.clearTimeout(window.__teacher_msg_timer__);
@@ -123,6 +148,7 @@ export default function TeacherDashboard() {
     }, 3000);
   };
 
+  // ── Data fetching ─────────────────────────────────────────────────────────
   const fetchStudents = async () => {
     const res = await api.get('/students');
     setStudents(res.data?.data || []);
@@ -148,15 +174,12 @@ export default function TeacherDashboard() {
   };
 
   const fetchRecords = async (sessionId) => {
-    if (!sessionId) {
-      setRecords([]);
-      return;
-    }
+    if (!sessionId) { setRecords([]); return; }
     setRecordsLoading(true);
     try {
       const res = await api.get(`/attendance/sessions/${sessionId}/records`);
       setRecords(res.data?.data || []);
-    } catch (err) {
+    } catch {
       notify('Không tải được kết quả điểm danh', 'error');
       setRecords([]);
     } finally {
@@ -168,95 +191,130 @@ export default function TeacherDashboard() {
     setLoading(true);
     try {
       await Promise.all([fetchStudents(), fetchSections(), fetchSessions()]);
-    } catch (err) {
+    } catch {
       notify('Không tải được dữ liệu dashboard', 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchAll();
-  }, []);
+  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => { if (selectedSessionId) fetchRecords(selectedSessionId); }, [selectedSessionId]);
 
-  useEffect(() => {
-    if (selectedSessionId) {
-      fetchRecords(selectedSessionId);
+  // ── Lecturer profile handlers ──────────────────────────────────────────────
+  const fetchLecturerList = async () => {
+    try {
+      const res = await api.get('/lecturers');
+      setLecturerList(res.data?.data || []);
+    } catch {}
+  };
+
+  const openProfileModal = () => {
+    setLecturerCode('');
+    setLecturerForm({ full_name: '', email: '' });
+    setLecturerInfo(null);
+    setLecturerFound(false);
+    setModalTab('profile');
+    setMySections([]);
+    setAvailableSections([]);
+    setAvailSearch('');
+    setAvailFilter('all');
+    setShowProfileModal(true);
+    fetchLecturerList();
+    setTimeout(() => lecturerCodeRef.current?.focus(), 100);
+  };
+
+  const handleLecturerSearch = async () => {
+    if (!lecturerCode.trim()) return;
+    setLecturerLoading(true);
+    setLecturerFound(false);
+    setMySections([]);
+    setAvailableSections([]);
+    try {
+      const res = await api.get(`/lecturers/${lecturerCode.trim().toUpperCase()}`);
+      const d = res.data.data;
+      setLecturerInfo(d);
+      setLecturerForm({ full_name: d.full_name || '', email: d.email || '' });
+      setLecturerFound(true);
+    } catch (err) {
+      const msg = err.response?.status === 404
+        ? 'Không tìm thấy giáo viên với mã này'
+        : 'Lỗi kết nối server';
+      notify(msg, 'error');
+    } finally {
+      setLecturerLoading(false);
     }
-  }, [selectedSessionId]);
+  };
 
-  const stats = useMemo(() => {
-    const totalStudents = students.length;
-    const totalSections = sections.length;
-    const totalSessions = sessions.length;
-    const openSessions = sessions.filter((s) => s.status === 'open').length;
-    const faceReady = students.filter((s) => s.has_face_profile || s.image_path).length;
-    const noFace = totalStudents - faceReady;
+  const fetchMySections = async () => {
+    if (!lecturerCode.trim()) return;
+    setMySectionsLoading(true);
+    try {
+      const res = await api.get(`/lecturers/${lecturerCode.trim().toUpperCase()}/sections`);
+      setMySections(res.data?.data || []);
+    } catch {
+      notify('Không tải được danh sách học phần', 'error');
+    } finally {
+      setMySectionsLoading(false);
+    }
+  };
 
-    return {
-      totalStudents,
-      totalSections,
-      totalSessions,
-      openSessions,
-      faceReady,
-      noFace,
-    };
-  }, [students, sections, sessions]);
+  const fetchAvailableSections = async () => {
+    if (!lecturerCode.trim()) return;
+    setAvailLoading(true);
+    try {
+      const res = await api.get(`/lecturers/${lecturerCode.trim().toUpperCase()}/available-sections`);
+      setAvailableSections(res.data?.data || []);
+    } catch {
+      notify('Không tải được danh sách học phần', 'error');
+    } finally {
+      setAvailLoading(false);
+    }
+  };
 
-  const filteredStudents = useMemo(() => {
-    const keyword = studentKeyword.trim().toLowerCase();
-    if (!keyword) return students;
+  const handleModalTabChange = (tab) => {
+    setModalTab(tab);
+    if (tab === 'my-sections' && mySections.length === 0) fetchMySections();
+    if (tab === 'register' && availableSections.length === 0) fetchAvailableSections();
+  };
 
-    return students.filter((s) => {
-      const target = [
-        s.student_code,
-        s.full_name,
-        s.class_name,
-        s.email,
-        s.enrolled_courses_summary,
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
+  const handleRegisterSection = async (sectionId) => {
+    if (!lecturerCode.trim()) return;
+    setRegisteringId(sectionId);
+    try {
+      const res = await api.post(`/lecturers/${lecturerCode.trim().toUpperCase()}/sections`, { section_id: sectionId });
+      notify(res.data?.message || 'Đã đăng ký giảng dạy!');
+      await Promise.all([fetchMySections(), fetchAvailableSections()]);
+    } catch (err) {
+      notify(err.response?.data?.message || 'Lỗi khi đăng ký', 'error');
+    } finally {
+      setRegisteringId(null);
+    }
+  };
 
-      return target.includes(keyword);
-    });
-  }, [students, studentKeyword]);
+  const handleLecturerSave = async () => {
+    if (!lecturerForm.full_name.trim()) {
+      notify('Họ tên không được để trống', 'error');
+      return;
+    }
+    setLecturerSaving(true);
+    try {
+      await api.put(`/lecturers/${lecturerCode.trim().toUpperCase()}`, lecturerForm);
+      notify('Cập nhật profile giáo viên thành công!');
+      setLecturerInfo((prev) => prev ? { ...prev, ...lecturerForm } : prev);
+    } catch (err) {
+      notify(err.response?.data?.message || 'Lỗi khi cập nhật', 'error');
+    } finally {
+      setLecturerSaving(false);
+    }
+  };
 
-  const filteredSessions = useMemo(() => {
-    const keyword = sessionKeyword.trim().toLowerCase();
-
-    return sessions.filter((s) => {
-      const matchKeyword = !keyword
-        ? true
-        : [s.session_title, s.course_name, s.class_name, s.status]
-            .filter(Boolean)
-            .join(' ')
-            .toLowerCase()
-            .includes(keyword);
-
-      const matchStatus =
-        sessionStatusFilter === 'all' ? true : s.status === sessionStatusFilter;
-
-      return matchKeyword && matchStatus;
-    });
-  }, [sessions, sessionKeyword, sessionStatusFilter]);
-
-  const attendanceSummary = useMemo(() => {
-    return {
-      early: records.filter((r) => r.attendance_status === 'early').length,
-      on_time: records.filter((r) => r.attendance_status === 'on_time').length,
-      late: records.filter((r) => r.attendance_status === 'late').length,
-      absent: records.filter((r) => r.attendance_status === 'absent').length,
-    };
-  }, [records]);
-
+  // ── Session handlers ───────────────────────────────────────────────────────
   const handleCreateSession = async () => {
     if (!form.section_id || !form.session_title.trim()) {
       notify('Vui lòng chọn học phần và nhập tên phiên điểm danh', 'error');
       return;
     }
-
     try {
       const payload = {
         section_id: Number(form.section_id),
@@ -266,14 +324,9 @@ export default function TeacherDashboard() {
         end_time: `${form.session_date} ${form.end_time}:00`,
         late_after_minutes: Number(form.late_after_minutes),
       };
-
       await api.post('/attendance/sessions', payload);
-
       notify('Tạo phiên điểm danh thành công');
-      setForm((prev) => ({
-        ...prev,
-        session_title: '',
-      }));
+      setForm((prev) => ({ ...prev, session_title: '' }));
       await fetchSessions();
       setActiveTab('sessions');
     } catch (err) {
@@ -286,9 +339,7 @@ export default function TeacherDashboard() {
       await api.put(`/attendance/sessions/${id}/open`);
       notify('Đã mở phiên điểm danh');
       await fetchSessions();
-      if (String(selectedSessionId) === String(id)) {
-        await fetchRecords(id);
-      }
+      if (String(selectedSessionId) === String(id)) await fetchRecords(id);
     } catch (err) {
       notify(err.response?.data?.message || 'Không thể mở phiên', 'error');
     }
@@ -299,25 +350,20 @@ export default function TeacherDashboard() {
       await api.put(`/attendance/sessions/${id}/close`);
       notify('Đã đóng phiên điểm danh');
       await fetchSessions();
-      if (String(selectedSessionId) === String(id)) {
-        await fetchRecords(id);
-      }
+      if (String(selectedSessionId) === String(id)) await fetchRecords(id);
     } catch (err) {
       notify(err.response?.data?.message || 'Không thể đóng phiên', 'error');
     }
   };
 
-  const handleSelectSession = async (id) => {
+  const handleSelectSession = (id) => {
     setSelectedSessionId(String(id));
     setActiveTab('records');
   };
 
   const handleExport = async (id) => {
     try {
-      const res = await api.get(`/attendance/sessions/${id}/export`, {
-        responseType: 'blob',
-      });
-
+      const res = await api.get(`/attendance/sessions/${id}/export`, { responseType: 'blob' });
       const url = window.URL.createObjectURL(new Blob([res.data], { type: 'text/csv;charset=utf-8;' }));
       const link = document.createElement('a');
       link.href = url;
@@ -326,28 +372,63 @@ export default function TeacherDashboard() {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
-
       notify('Đã export báo cáo điểm danh');
-    } catch (err) {
+    } catch {
       notify('Không thể export báo cáo', 'error');
     }
   };
 
+  // ── Computed ────────────────────────────────────────────────────────────────
+  const stats = useMemo(() => ({
+    totalStudents: students.length,
+    totalSections: sections.length,
+    totalSessions: sessions.length,
+    openSessions: sessions.filter((s) => s.status === 'open').length,
+    faceReady: students.filter((s) => s.has_face_profile || s.image_path).length,
+    noFace: students.length - students.filter((s) => s.has_face_profile || s.image_path).length,
+  }), [students, sections, sessions]);
+
+  const filteredStudents = useMemo(() => {
+    const kw = studentKeyword.trim().toLowerCase();
+    if (!kw) return students;
+    return students.filter((s) =>
+      [s.student_code, s.full_name, s.class_name, s.email, s.enrolled_courses_summary]
+        .filter(Boolean).join(' ').toLowerCase().includes(kw)
+    );
+  }, [students, studentKeyword]);
+
+  const filteredSessions = useMemo(() => {
+    const kw = sessionKeyword.trim().toLowerCase();
+    return sessions.filter((s) => {
+      const matchKw = !kw || [s.session_title, s.course_name, s.class_name, s.status]
+        .filter(Boolean).join(' ').toLowerCase().includes(kw);
+      const matchStatus = sessionStatusFilter === 'all' || s.status === sessionStatusFilter;
+      return matchKw && matchStatus;
+    });
+  }, [sessions, sessionKeyword, sessionStatusFilter]);
+
+  const attendanceSummary = useMemo(() => ({
+    early: records.filter((r) => r.attendance_status === 'early').length,
+    on_time: records.filter((r) => r.attendance_status === 'on_time').length,
+    late: records.filter((r) => r.attendance_status === 'late').length,
+    absent: records.filter((r) => r.attendance_status === 'absent').length,
+  }), [records]);
+
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <main className="flex-grow bg-surface py-10 px-4 md:px-8">
       <div className="max-w-7xl mx-auto space-y-6">
         {message && (
-          <div
-            className={`rounded-xl border px-4 py-3 text-sm font-semibold ${
-              message.type === 'error'
-                ? 'bg-rose-50 text-rose-700 border-rose-200'
-                : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-            }`}
-          >
+          <div className={`rounded-xl border px-4 py-3 text-sm font-semibold ${
+            message.type === 'error'
+              ? 'bg-rose-50 text-rose-700 border-rose-200'
+              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+          }`}>
             {message.text}
           </div>
         )}
 
+        {/* ── Header ────────────────────────────────────────────────────── */}
         <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary-container/10 text-primary-container font-bold text-sm mb-3">
@@ -358,27 +439,18 @@ export default function TeacherDashboard() {
               Trang điều khiển giáo viên
             </h1>
             <p className="text-secondary max-w-3xl">
-              Quản lý học phần, phiên điểm danh, xem kết quả và chuyển nhanh sang chế độ quét camera từ một màn hình duy nhất.
+              Quản lý học phần, phiên điểm danh, xem kết quả và cập nhật thông tin giáo viên từ một màn hình duy nhất.
             </p>
           </div>
 
           <div className="flex flex-wrap gap-3">
-            <Link
-              to="/profile"
+            <button
+              onClick={openProfileModal}
               className="inline-flex items-center gap-2 px-4 py-3 rounded-lg bg-white border border-outline-variant/30 font-bold hover:bg-surface-container-low"
             >
-              <GraduationCap className="w-4 h-4" />
-              Cập nhật profile
-            </Link>
-
-            <Link
-              to="/scan"
-              className="inline-flex items-center gap-2 px-4 py-3 rounded-lg bg-primary-container text-white font-bold hover:opacity-90"
-            >
-              <Camera className="w-4 h-4" />
-              Sang trang scan
-            </Link>
-
+              <User className="w-4 h-4" />
+              Quản lý giáo viên
+            </button>
             <button
               onClick={fetchAll}
               className="inline-flex items-center gap-2 px-4 py-3 rounded-lg bg-white border border-outline-variant/30 font-bold hover:bg-surface-container-low"
@@ -389,6 +461,302 @@ export default function TeacherDashboard() {
           </div>
         </div>
 
+        {/* ── Lecturer Management Modal ────────────────────────────────── */}
+        {showProfileModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col" style={{ maxHeight: '90vh' }}>
+
+              {/* Modal header */}
+              <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-outline-variant/20 shrink-0">
+                <div>
+                  <h2 className="text-lg font-black text-on-surface">Quản lý giáo viên</h2>
+                  {lecturerInfo && (
+                    <p className="text-sm text-secondary mt-0.5">{lecturerInfo.lecturer_code} — {lecturerInfo.full_name}</p>
+                  )}
+                </div>
+                <button onClick={() => setShowProfileModal(false)} className="text-secondary hover:text-on-surface p-1">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Lecturer picker */}
+              <div className="px-6 py-4 bg-surface-container-low/50 border-b border-outline-variant/20 shrink-0">
+                <div className="flex gap-2">
+                  <select
+                    className="flex-1 border border-outline-variant/50 rounded-lg px-3 py-2.5 text-sm bg-white"
+                    value={lecturerCode}
+                    onChange={(e) => {
+                      setLecturerCode(e.target.value);
+                      setLecturerFound(false);
+                      setLecturerInfo(null);
+                      setLecturerForm({ full_name: '', email: '' });
+                      setMySections([]);
+                      setAvailableSections([]);
+                    }}
+                  >
+                    <option value="">-- Chọn giáo viên --</option>
+                    {lecturerList.map((l) => (
+                      <option key={l.lecturer_id} value={l.lecturer_code}>
+                        {l.lecturer_code} — {l.full_name}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    ref={lecturerCodeRef}
+                    type="text"
+                    placeholder="Mã GV (VD: GV001)"
+                    value={lecturerCode}
+                    onChange={(e) => {
+                      setLecturerCode(e.target.value.toUpperCase());
+                      setLecturerFound(false);
+                      setLecturerInfo(null);
+                    }}
+                    onKeyDown={(e) => e.key === 'Enter' && handleLecturerSearch()}
+                    className="w-36 border border-outline-variant/50 rounded-lg px-3 py-2.5 text-sm"
+                  />
+                  <button
+                    onClick={handleLecturerSearch}
+                    disabled={lecturerLoading || !lecturerCode.trim()}
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-primary-container text-white font-bold text-sm disabled:opacity-50 shrink-0"
+                  >
+                    {lecturerLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                    Tìm
+                  </button>
+                </div>
+              </div>
+
+              {!lecturerFound ? (
+                <div className="px-6 py-10 text-center text-secondary text-sm">
+                  Chọn hoặc nhập mã giáo viên rồi nhấn <strong>Tìm</strong> để bắt đầu.
+                </div>
+              ) : (
+                <>
+                  {/* Tab bar */}
+                  <div className="flex gap-1 px-6 pt-4 shrink-0 border-b border-outline-variant/10 pb-3">
+                    {[
+                      { key: 'profile', label: 'Profile', icon: <User className="w-4 h-4" /> },
+                      { key: 'my-sections', label: 'Lớp đang dạy', icon: <BookOpen className="w-4 h-4" /> },
+                      { key: 'register', label: 'Đăng ký giảng dạy', icon: <UserPlus className="w-4 h-4" /> },
+                    ].map((t) => (
+                      <button
+                        key={t.key}
+                        onClick={() => handleModalTabChange(t.key)}
+                        className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-bold transition ${
+                          modalTab === t.key
+                            ? 'bg-primary-container text-white'
+                            : 'text-secondary hover:bg-surface-container-low'
+                        }`}
+                      >
+                        {t.icon}{t.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Scrollable tab content */}
+                  <div className="flex-1 overflow-y-auto px-6 py-5 min-h-0">
+
+                    {/* TAB: Profile */}
+                    {modalTab === 'profile' && (
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-xs font-bold text-secondary uppercase mb-2">Họ và tên *</label>
+                          <div className="relative">
+                            <User className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-secondary" />
+                            <input
+                              type="text"
+                              value={lecturerForm.full_name}
+                              onChange={(e) => setLecturerForm((p) => ({ ...p, full_name: e.target.value }))}
+                              className="w-full border border-outline-variant/50 rounded-lg pl-10 pr-4 py-3 text-sm"
+                              placeholder="VD: Nguyễn Văn An"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-secondary uppercase mb-2">Email</label>
+                          <div className="relative">
+                            <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-secondary" />
+                            <input
+                              type="email"
+                              value={lecturerForm.email}
+                              onChange={(e) => setLecturerForm((p) => ({ ...p, email: e.target.value }))}
+                              className="w-full border border-outline-variant/50 rounded-lg pl-10 pr-4 py-3 text-sm"
+                              placeholder="VD: an.nguyen@university.edu.vn"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex gap-3 pt-2">
+                          <button
+                            onClick={() => setShowProfileModal(false)}
+                            className="flex-1 py-3 rounded-lg border border-outline-variant/50 font-semibold text-secondary hover:bg-surface-container-low text-sm"
+                          >
+                            Đóng
+                          </button>
+                          <button
+                            onClick={handleLecturerSave}
+                            disabled={lecturerSaving}
+                            className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-lg bg-primary-container text-white font-bold text-sm disabled:opacity-50"
+                          >
+                            {lecturerSaving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                            {lecturerSaving ? 'Đang lưu...' : 'Lưu profile'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* TAB: My Sections */}
+                    {modalTab === 'my-sections' && (
+                      <div>
+                        <div className="flex items-center justify-between mb-4">
+                          <p className="text-sm text-secondary">
+                            Các học phần <span className="font-bold text-on-surface">{lecturerInfo?.full_name}</span> đang phụ trách
+                          </p>
+                          <button onClick={fetchMySections} className="inline-flex items-center gap-1 text-xs text-secondary hover:text-on-surface">
+                            <RefreshCw className="w-3.5 h-3.5" /> Làm mới
+                          </button>
+                        </div>
+
+                        {mySectionsLoading ? (
+                          <div className="text-secondary text-sm text-center py-8">Đang tải...</div>
+                        ) : mySections.length === 0 ? (
+                          <div className="text-center py-10 text-secondary text-sm">
+                            <BookOpen className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                            <p>Giáo viên này chưa phụ trách học phần nào.</p>
+                            <p className="mt-1 text-xs">Chuyển sang tab <strong>Đăng ký giảng dạy</strong> để thêm học phần.</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {mySections.map((s) => (
+                              <div key={s.section_id} className="rounded-xl border border-outline-variant/20 bg-white p-4 hover:border-primary-container/40 transition">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <div className="font-bold text-on-surface">{s.course_code} — {s.course_name}</div>
+                                    <div className="text-sm text-secondary mt-1">
+                                      Lớp: <span className="font-semibold">{s.class_name}</span>
+                                      {s.schedule_note && <span className="ml-2 text-xs text-secondary">({s.schedule_note})</span>}
+                                    </div>
+                                  </div>
+                                  <div className="flex flex-col items-end gap-1.5 shrink-0">
+                                    <span className="inline-flex items-center gap-1 text-xs font-bold bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full">
+                                      <Users className="w-3 h-3" />{s.enrolled_count} SV
+                                    </span>
+                                    <span className="text-xs text-secondary">{s.session_count} phiên</span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* TAB: Register */}
+                    {modalTab === 'register' && (
+                      <div>
+                        {/* Filter bar */}
+                        <div className="flex flex-wrap gap-2 mb-4">
+                          <div className="relative flex-1 min-w-40">
+                            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-secondary" />
+                            <input
+                              type="text"
+                              placeholder="Tìm môn học, lớp..."
+                              value={availSearch}
+                              onChange={(e) => setAvailSearch(e.target.value)}
+                              className="w-full border border-outline-variant/50 rounded-lg pl-8 pr-3 py-2 text-sm"
+                            />
+                          </div>
+                          <select
+                            value={availFilter}
+                            onChange={(e) => setAvailFilter(e.target.value)}
+                            className="border border-outline-variant/50 rounded-lg px-3 py-2 text-sm"
+                          >
+                            <option value="all">Tất cả học phần</option>
+                            <option value="mine">Đang dạy</option>
+                            <option value="other">Của GV khác</option>
+                          </select>
+                          <button
+                            onClick={fetchAvailableSections}
+                            className="inline-flex items-center gap-1 text-xs px-3 py-2 border border-outline-variant/50 rounded-lg text-secondary hover:bg-surface-container-low"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" /> Làm mới
+                          </button>
+                        </div>
+
+                        {availLoading ? (
+                          <div className="text-secondary text-sm text-center py-8">Đang tải...</div>
+                        ) : (() => {
+                          const kw = availSearch.trim().toLowerCase();
+                          const filtered = availableSections.filter((s) => {
+                            const matchKw = !kw || `${s.course_code} ${s.course_name} ${s.class_name} ${s.class_code}`.toLowerCase().includes(kw);
+                            const matchFilter = availFilter === 'all' ? true : availFilter === 'mine' ? s.is_mine : !s.is_mine;
+                            return matchKw && matchFilter;
+                          });
+
+                          if (filtered.length === 0) return (
+                            <div className="text-center py-10 text-secondary text-sm">
+                              <Layers className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                              Không có học phần nào phù hợp.
+                            </div>
+                          );
+
+                          return (
+                            <div className="space-y-2">
+                              {filtered.map((s) => (
+                                <div
+                                  key={s.section_id}
+                                  className={`rounded-xl border p-3.5 flex items-center justify-between gap-3 transition ${
+                                    s.is_mine
+                                      ? 'border-emerald-200 bg-emerald-50'
+                                      : 'border-outline-variant/20 hover:border-outline-variant/50 bg-white'
+                                  }`}
+                                >
+                                  <div className="min-w-0 flex-1">
+                                    <div className="font-bold text-on-surface text-sm">{s.course_code} — {s.course_name}</div>
+                                    <div className="text-xs text-secondary mt-0.5">
+                                      Lớp: <span className="font-semibold">{s.class_name}</span>
+                                      {s.schedule_note && <span className="ml-1.5">({s.schedule_note})</span>}
+                                    </div>
+                                    {!s.is_mine && (
+                                      <div className="text-xs text-secondary mt-0.5">
+                                        GV hiện tại: <span className="font-semibold">{s.current_lecturer_name}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <span className="text-xs text-secondary">{s.enrolled_count} SV</span>
+                                    {s.is_mine ? (
+                                      <span className="inline-flex items-center gap-1 text-xs font-bold bg-emerald-100 text-emerald-700 px-2.5 py-1.5 rounded-lg">
+                                        <CheckCircle2 className="w-3.5 h-3.5" />Đang dạy
+                                      </span>
+                                    ) : (
+                                      <button
+                                        onClick={() => handleRegisterSection(s.section_id)}
+                                        disabled={registeringId === s.section_id}
+                                        className="inline-flex items-center gap-1 text-xs font-bold bg-primary-container text-white px-3 py-1.5 rounded-lg hover:opacity-90 disabled:opacity-50"
+                                      >
+                                        {registeringId === s.section_id
+                                          ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                          : <UserPlus className="w-3.5 h-3.5" />
+                                        }
+                                        Đăng ký
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+
+                  </div>{/* end scrollable */}
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Stats ─────────────────────────────────────────────────────── */}
         <div className="grid grid-cols-2 xl:grid-cols-6 gap-4">
           <StatCard icon={<Users className="w-6 h-6" />} label="Tổng sinh viên" value={stats.totalStudents} />
           <StatCard icon={<BookOpen className="w-6 h-6" />} label="Tổng học phần" value={stats.totalSections} />
@@ -398,6 +766,7 @@ export default function TeacherDashboard() {
           <StatCard icon={<AlertTriangle className="w-6 h-6" />} label="Chưa có face profile" value={stats.noFace} tone="warning" />
         </div>
 
+        {/* ── Tab nav ────────────────────────────────────────────────────── */}
         <div className="bg-white rounded-2xl border border-outline-variant/30 shadow-sm p-2">
           <div className="flex flex-wrap gap-2">
             {tabs.map((tab) => (
@@ -416,15 +785,14 @@ export default function TeacherDashboard() {
           </div>
         </div>
 
+        {/* ── Tab: Overview ─────────────────────────────────────────────── */}
         {activeTab === 'overview' && (
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
             <div className="xl:col-span-1">
               <Card title="Tạo phiên điểm danh" icon={<Plus className="w-5 h-5" />}>
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-xs font-bold text-secondary uppercase mb-2">
-                      Học phần
-                    </label>
+                    <label className="block text-xs font-bold text-secondary uppercase mb-2">Học phần</label>
                     <select
                       value={form.section_id}
                       onChange={(e) => setForm({ ...form, section_id: e.target.value })}
@@ -438,11 +806,8 @@ export default function TeacherDashboard() {
                       ))}
                     </select>
                   </div>
-
                   <div>
-                    <label className="block text-xs font-bold text-secondary uppercase mb-2">
-                      Tên phiên
-                    </label>
+                    <label className="block text-xs font-bold text-secondary uppercase mb-2">Tên phiên</label>
                     <input
                       type="text"
                       value={form.session_title}
@@ -451,11 +816,8 @@ export default function TeacherDashboard() {
                       className="w-full border border-outline-variant/50 rounded-lg px-4 py-3 text-sm"
                     />
                   </div>
-
                   <div>
-                    <label className="block text-xs font-bold text-secondary uppercase mb-2">
-                      Ngày
-                    </label>
+                    <label className="block text-xs font-bold text-secondary uppercase mb-2">Ngày</label>
                     <input
                       type="date"
                       value={form.session_date}
@@ -463,50 +825,21 @@ export default function TeacherDashboard() {
                       className="w-full border border-outline-variant/50 rounded-lg px-4 py-3 text-sm"
                     />
                   </div>
-
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-bold text-secondary uppercase mb-2">
-                        Bắt đầu
-                      </label>
-                      <input
-                        type="time"
-                        value={form.start_time}
-                        onChange={(e) => setForm({ ...form, start_time: e.target.value })}
-                        className="w-full border border-outline-variant/50 rounded-lg px-4 py-3 text-sm"
-                      />
+                      <label className="block text-xs font-bold text-secondary uppercase mb-2">Bắt đầu</label>
+                      <input type="time" value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} className="w-full border border-outline-variant/50 rounded-lg px-4 py-3 text-sm" />
                     </div>
-
                     <div>
-                      <label className="block text-xs font-bold text-secondary uppercase mb-2">
-                        Kết thúc
-                      </label>
-                      <input
-                        type="time"
-                        value={form.end_time}
-                        onChange={(e) => setForm({ ...form, end_time: e.target.value })}
-                        className="w-full border border-outline-variant/50 rounded-lg px-4 py-3 text-sm"
-                      />
+                      <label className="block text-xs font-bold text-secondary uppercase mb-2">Kết thúc</label>
+                      <input type="time" value={form.end_time} onChange={(e) => setForm({ ...form, end_time: e.target.value })} className="w-full border border-outline-variant/50 rounded-lg px-4 py-3 text-sm" />
                     </div>
                   </div>
-
                   <div>
-                    <label className="block text-xs font-bold text-secondary uppercase mb-2">
-                      Cho phép đi muộn (phút)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={form.late_after_minutes}
-                      onChange={(e) => setForm({ ...form, late_after_minutes: e.target.value })}
-                      className="w-full border border-outline-variant/50 rounded-lg px-4 py-3 text-sm"
-                    />
+                    <label className="block text-xs font-bold text-secondary uppercase mb-2">Cho phép đi muộn (phút)</label>
+                    <input type="number" min="0" value={form.late_after_minutes} onChange={(e) => setForm({ ...form, late_after_minutes: e.target.value })} className="w-full border border-outline-variant/50 rounded-lg px-4 py-3 text-sm" />
                   </div>
-
-                  <button
-                    onClick={handleCreateSession}
-                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-primary-container text-white font-bold hover:opacity-90"
-                  >
+                  <button onClick={handleCreateSession} className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-primary-container text-white font-bold hover:opacity-90">
                     <Plus className="w-4 h-4" />
                     Tạo phiên mới
                   </button>
@@ -535,49 +868,27 @@ export default function TeacherDashboard() {
                   {sessions.slice(0, 5).map((s) => (
                     <div key={s.session_id} className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 border border-outline-variant/20 rounded-xl p-4">
                       <div>
-                        <div className="font-bold text-on-surface">
-                          {s.session_title || `Phiên #${s.session_id}`}
-                        </div>
-                        <div className="text-sm text-secondary mt-1">
-                          {s.course_name} • {s.class_name}
-                        </div>
-                        <div className="text-sm text-secondary mt-1">
-                          {formatDateTime(s.start_time)}
-                        </div>
+                        <div className="font-bold text-on-surface">{s.session_title || `Phiên #${s.session_id}`}</div>
+                        <div className="text-sm text-secondary mt-1">{s.course_name} • {s.class_name}</div>
+                        <div className="text-sm text-secondary mt-1">{formatDateTime(s.start_time)}</div>
                       </div>
-
                       <div className="flex items-center gap-2 flex-wrap">
-                        <Badge className={sessionStatusClass[s.status] || 'bg-slate-100 text-slate-700'}>
-                          {s.status}
-                        </Badge>
-
-                        <button
-                          onClick={() => handleSelectSession(s.session_id)}
-                          className="px-3 py-2 rounded-lg bg-surface-container-low font-semibold"
-                        >
-                          Xem
-                        </button>
-
-                        <button
-                          onClick={() => handleExport(s.session_id)}
-                          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-outline-variant/30 font-semibold"
-                        >
-                          <FileDown className="w-4 h-4" />
-                          Export
+                        <Badge className={sessionStatusClass[s.status] || 'bg-slate-100 text-slate-700'}>{s.status}</Badge>
+                        <button onClick={() => handleSelectSession(s.session_id)} className="px-3 py-2 rounded-lg bg-surface-container-low font-semibold">Xem</button>
+                        <button onClick={() => handleExport(s.session_id)} className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-outline-variant/30 font-semibold">
+                          <FileDown className="w-4 h-4" />Export
                         </button>
                       </div>
                     </div>
                   ))}
-
-                  {sessions.length === 0 && (
-                    <p className="text-secondary text-sm">Chưa có phiên điểm danh nào.</p>
-                  )}
+                  {sessions.length === 0 && <p className="text-secondary text-sm">Chưa có phiên điểm danh nào.</p>}
                 </div>
               </Card>
             </div>
           </div>
         )}
 
+        {/* ── Tab: Sessions ─────────────────────────────────────────────── */}
         {activeTab === 'sessions' && (
           <Card
             title="Quản lý phiên điểm danh"
@@ -586,22 +897,11 @@ export default function TeacherDashboard() {
               <div className="flex flex-wrap gap-2">
                 <div className="relative">
                   <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-secondary" />
-                  <input
-                    type="text"
-                    placeholder="Tìm theo tên phiên, môn học..."
-                    value={sessionKeyword}
-                    onChange={(e) => setSessionKeyword(e.target.value)}
-                    className="pl-9 pr-3 py-2 rounded-lg border border-outline-variant/50 text-sm"
-                  />
+                  <input type="text" placeholder="Tìm theo tên phiên, môn học..." value={sessionKeyword} onChange={(e) => setSessionKeyword(e.target.value)} className="pl-9 pr-3 py-2 rounded-lg border border-outline-variant/50 text-sm" />
                 </div>
-
                 <div className="relative">
                   <Filter className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-secondary" />
-                  <select
-                    value={sessionStatusFilter}
-                    onChange={(e) => setSessionStatusFilter(e.target.value)}
-                    className="pl-9 pr-8 py-2 rounded-lg border border-outline-variant/50 text-sm"
-                  >
+                  <select value={sessionStatusFilter} onChange={(e) => setSessionStatusFilter(e.target.value)} className="pl-9 pr-8 py-2 rounded-lg border border-outline-variant/50 text-sm">
                     <option value="all">Tất cả trạng thái</option>
                     <option value="draft">Draft</option>
                     <option value="open">Open</option>
@@ -640,43 +940,19 @@ export default function TeacherDashboard() {
                         <td className="py-3 pr-4">{formatDateTime(s.start_time)}</td>
                         <td className="py-3 pr-4">{s.late_after_minutes ?? '--'} phút</td>
                         <td className="py-3 pr-4">
-                          <Badge className={sessionStatusClass[s.status] || 'bg-slate-100 text-slate-700'}>
-                            {s.status}
-                          </Badge>
+                          <Badge className={sessionStatusClass[s.status] || 'bg-slate-100 text-slate-700'}>{s.status}</Badge>
                         </td>
                         <td className="py-3 text-right">
                           <div className="inline-flex flex-wrap gap-2 justify-end">
-                            <button
-                              onClick={() => handleSelectSession(s.session_id)}
-                              className="px-3 py-2 rounded-lg bg-surface-container-low font-semibold"
-                            >
-                              Xem kết quả
+                            <button onClick={() => handleSelectSession(s.session_id)} className="px-3 py-2 rounded-lg bg-surface-container-low font-semibold">Xem kết quả</button>
+                            <button onClick={() => handleOpenSession(s.session_id)} disabled={s.status === 'open'} className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-emerald-600 text-white disabled:opacity-50">
+                              <Play className="w-4 h-4" />Mở
                             </button>
-
-                            <button
-                              onClick={() => handleOpenSession(s.session_id)}
-                              disabled={s.status === 'open'}
-                              className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-emerald-600 text-white disabled:opacity-50"
-                            >
-                              <Play className="w-4 h-4" />
-                              Mở
+                            <button onClick={() => handleCloseSession(s.session_id)} disabled={s.status === 'closed'} className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-rose-600 text-white disabled:opacity-50">
+                              <Square className="w-4 h-4" />Đóng
                             </button>
-
-                            <button
-                              onClick={() => handleCloseSession(s.session_id)}
-                              disabled={s.status === 'closed'}
-                              className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-rose-600 text-white disabled:opacity-50"
-                            >
-                              <Square className="w-4 h-4" />
-                              Đóng
-                            </button>
-
-                            <button
-                              onClick={() => handleExport(s.session_id)}
-                              className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-white border border-outline-variant/30 font-semibold"
-                            >
-                              <FileDown className="w-4 h-4" />
-                              Export
+                            <button onClick={() => handleExport(s.session_id)} className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-white border border-outline-variant/30 font-semibold">
+                              <FileDown className="w-4 h-4" />Export
                             </button>
                           </div>
                         </td>
@@ -689,21 +965,16 @@ export default function TeacherDashboard() {
           </Card>
         )}
 
+        {/* ── Tab: Records ──────────────────────────────────────────────── */}
         {activeTab === 'records' && (
           <Card
             title="Kết quả điểm danh"
             icon={<CheckCircle2 className="w-5 h-5" />}
             action={
-              <select
-                value={selectedSessionId}
-                onChange={(e) => setSelectedSessionId(e.target.value)}
-                className="px-3 py-2 rounded-lg border border-outline-variant/50 text-sm"
-              >
+              <select value={selectedSessionId} onChange={(e) => setSelectedSessionId(e.target.value)} className="px-3 py-2 rounded-lg border border-outline-variant/50 text-sm">
                 <option value="">Chọn phiên điểm danh</option>
                 {sessions.map((s) => (
-                  <option key={s.session_id} value={s.session_id}>
-                    #{s.session_id} - {s.session_title || 'Phiên điểm danh'}
-                  </option>
+                  <option key={s.session_id} value={s.session_id}>#{s.session_id} - {s.session_title || 'Phiên điểm danh'}</option>
                 ))}
               </select>
             }
@@ -722,7 +993,6 @@ export default function TeacherDashboard() {
                   <StatCard icon={<AlertTriangle className="w-5 h-5" />} label="Đi muộn" value={attendanceSummary.late} tone="warning" />
                   <StatCard icon={<XCircle className="w-5 h-5" />} label="Vắng mặt" value={attendanceSummary.absent} tone="danger" />
                 </div>
-
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
@@ -743,9 +1013,7 @@ export default function TeacherDashboard() {
                           <td className="py-3 pr-4">{r.class_name || r.class_code || '--'}</td>
                           <td className="py-3 pr-4">{formatDateTime(r.checkin_time)}</td>
                           <td className="py-3 pr-4">
-                            <Badge className={attendanceStatusClass[r.attendance_status] || 'bg-slate-100 text-slate-700'}>
-                              {r.attendance_status}
-                            </Badge>
+                            <Badge className={attendanceStatusClass[r.attendance_status] || 'bg-slate-100 text-slate-700'}>{r.attendance_status}</Badge>
                           </td>
                           <td className="py-3 pr-4">{r.recognition_status || '--'}</td>
                         </tr>
@@ -753,14 +1021,9 @@ export default function TeacherDashboard() {
                     </tbody>
                   </table>
                 </div>
-
                 <div className="flex justify-end">
-                  <button
-                    onClick={() => handleExport(selectedSessionId)}
-                    className="inline-flex items-center gap-2 px-4 py-3 rounded-lg bg-primary-container text-white font-bold hover:opacity-90"
-                  >
-                    <FileDown className="w-4 h-4" />
-                    Export CSV
+                  <button onClick={() => handleExport(selectedSessionId)} className="inline-flex items-center gap-2 px-4 py-3 rounded-lg bg-primary-container text-white font-bold hover:opacity-90">
+                    <FileDown className="w-4 h-4" />Export CSV
                   </button>
                 </div>
               </div>
@@ -768,6 +1031,7 @@ export default function TeacherDashboard() {
           </Card>
         )}
 
+        {/* ── Tab: Students ─────────────────────────────────────────────── */}
         {activeTab === 'students' && (
           <Card
             title="Danh sách sinh viên"
@@ -804,19 +1068,9 @@ export default function TeacherDashboard() {
                           <div className="text-xs text-secondary mt-1 line-clamp-3">{s.enrolled_courses_summary}</div>
                         )}
                       </div>
-
                       <Badge className={(s.has_face_profile || s.image_path) ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}>
                         {(s.has_face_profile || s.image_path) ? 'Đã có face' : 'Chưa có face'}
                       </Badge>
-                    </div>
-
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <Link
-                        to="/profile"
-                        className="px-3 py-2 rounded-lg bg-surface-container-low font-semibold"
-                      >
-                        Cập nhật profile
-                      </Link>
                     </div>
                   </div>
                 ))}
@@ -824,6 +1078,7 @@ export default function TeacherDashboard() {
             )}
           </Card>
         )}
+
       </div>
     </main>
   );

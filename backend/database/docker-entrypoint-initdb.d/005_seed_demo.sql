@@ -166,7 +166,7 @@ BEGIN
         JOIN courses co ON co.course_id = cs.course_id
         ORDER BY cs.section_id
     LOOP
-        base_date := DATE '2026-03-02' + ((section_rec.section_order - 1) % 8);
+        base_date := DATE '2026-03-02' + (((section_rec.section_order - 1) % 8)::INT);
         start_hour := CASE section_rec.section_order % 3
             WHEN 1 THEN 7
             WHEN 2 THEN 13

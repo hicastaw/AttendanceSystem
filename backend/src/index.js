@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import studentsRouter from './routes/students.js';
 import attendanceRouter from './routes/attendance.js';
+import lecturersRouter from './routes/lecturers.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -25,6 +26,7 @@ app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 // Routes
 app.use('/api/v1/students', studentsRouter);
 app.use('/api/v1/attendance', attendanceRouter);
+app.use('/api/v1/lecturers', lecturersRouter);
 
 // Health check
 app.get('/api/health', (req, res) => {
