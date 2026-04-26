@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { buildAuthHeaders, getStoredSession } from '../auth/session.js';
 
 const api = axios.create({
   baseURL: '/api/v1',
@@ -6,7 +7,15 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Interceptor: log lỗi
+api.interceptors.request.use((config) => {
+  const session = getStoredSession();
+  config.headers = {
+    ...(config.headers || {}),
+    ...buildAuthHeaders(session),
+  };
+  return config;
+});
+
 api.interceptors.response.use(
   (res) => res,
   (err) => {

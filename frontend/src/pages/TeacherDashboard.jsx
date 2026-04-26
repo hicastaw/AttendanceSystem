@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import api from '../api/client.js';
+import { useAuth } from '../auth/AuthContext.jsx';
 import {
   LayoutDashboard,
   Users,
@@ -37,6 +38,7 @@ const sessionStatusClass = {
   draft: 'bg-slate-100 text-slate-700',
   open: 'bg-emerald-100 text-emerald-700',
   closed: 'bg-rose-100 text-rose-700',
+  submitted: 'bg-violet-100 text-violet-700',
 };
 
 const attendanceStatusClass = {
@@ -96,6 +98,7 @@ function formatDateTime(value) {
 }
 
 export default function TeacherDashboard() {
+  const { actor, isAdmin, isLecturer } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
   const [students, setStudents] = useState([]);
   const [sections, setSections] = useState([]);
@@ -105,6 +108,15 @@ export default function TeacherDashboard() {
   const [loading, setLoading] = useState(true);
   const [recordsLoading, setRecordsLoading] = useState(false);
   const [message, setMessage] = useState(null);
+  const [showOverrideModal, setShowOverrideModal] = useState(false);
+  const [overrideSaving, setOverrideSaving] = useState(false);
+  const [overrideForm, setOverrideForm] = useState({
+    record_id: '',
+    student_code: '',
+    student_name: '',
+    attendance_status: 'on_time',
+    note: '',
+  });
 
   const [studentKeyword, setStudentKeyword] = useState('');
   const [sessionKeyword, setSessionKeyword] = useState('');
@@ -200,6 +212,17 @@ export default function TeacherDashboard() {
 
   useEffect(() => { fetchAll(); }, []);
   useEffect(() => { if (selectedSessionId) fetchRecords(selectedSessionId); }, [selectedSessionId]);
+  useEffect(() => {
+    if (isLecturer && actor.lecturerCode) {
+      setLecturerCode(actor.lecturerCode);
+    }
+  }, [actor.lecturerCode, isLecturer]);
+
+  useEffect(() => {
+    if (showProfileModal && isLecturer && lecturerCode && !lecturerFound) {
+      handleLecturerSearch();
+    }
+  }, [showProfileModal, isLecturer, lecturerCode]);
 
   // ── Lecturer profile handlers ──────────────────────────────────────────────
   const fetchLecturerList = async () => {
@@ -210,7 +233,7 @@ export default function TeacherDashboard() {
   };
 
   const openProfileModal = () => {
-    setLecturerCode('');
+    setLecturerCode(isLecturer ? actor.lecturerCode : '');
     setLecturerForm({ full_name: '', email: '' });
     setLecturerInfo(null);
     setLecturerFound(false);
@@ -220,7 +243,7 @@ export default function TeacherDashboard() {
     setAvailSearch('');
     setAvailFilter('all');
     setShowProfileModal(true);
-    fetchLecturerList();
+    if (isAdmin) fetchLecturerList();
     setTimeout(() => lecturerCodeRef.current?.focus(), 100);
   };
 
@@ -356,6 +379,17 @@ export default function TeacherDashboard() {
     }
   };
 
+  const handleSubmitSession = async (id) => {
+    try {
+      await api.put(`/attendance/sessions/${id}/submit`);
+      notify('Đã chốt phiên điểm danh');
+      await fetchSessions();
+      if (String(selectedSessionId) === String(id)) await fetchRecords(id);
+    } catch (err) {
+      notify(err.response?.data?.message || 'Không thể chốt phiên', 'error');
+    }
+  };
+
   const handleSelectSession = (id) => {
     setSelectedSessionId(String(id));
     setActiveTab('records');
@@ -375,6 +409,57 @@ export default function TeacherDashboard() {
       notify('Đã export báo cáo điểm danh');
     } catch {
       notify('Không thể export báo cáo', 'error');
+    }
+  };
+
+  const openOverrideModal = (record) => {
+    setOverrideForm({
+      record_id: record.record_id,
+      student_code: record.student_code || '',
+      student_name: record.student_name || '',
+      attendance_status: record.attendance_status || 'on_time',
+      note: record.note || '',
+    });
+    setShowOverrideModal(true);
+  };
+
+  const closeOverrideModal = () => {
+    if (overrideSaving) return;
+    setShowOverrideModal(false);
+  };
+
+  const handleSaveOverride = async () => {
+    if (!selectedSessionId || !overrideForm.record_id) return;
+    setOverrideSaving(true);
+    try {
+      await api.put(
+        `/attendance/sessions/${selectedSessionId}/records/${overrideForm.record_id}/manual-override`,
+        {
+          attendance_status: overrideForm.attendance_status,
+          note: overrideForm.note,
+        }
+      );
+      notify('Đã cập nhật điểm danh thủ công');
+      setShowOverrideModal(false);
+      await fetchRecords(selectedSessionId);
+    } catch (err) {
+      notify(err.response?.data?.message || 'Không thể cập nhật điểm danh thủ công', 'error');
+    } finally {
+      setOverrideSaving(false);
+    }
+  };
+
+  const handleClearOverride = async (record) => {
+    if (!selectedSessionId || !record?.record_id) return;
+    setOverrideSaving(true);
+    try {
+      await api.delete(`/attendance/sessions/${selectedSessionId}/records/${record.record_id}/manual-override`);
+      notify('Đã bỏ manual override');
+      await fetchRecords(selectedSessionId);
+    } catch (err) {
+      notify(err.response?.data?.message || 'Không thể bỏ manual override', 'error');
+    } finally {
+      setOverrideSaving(false);
     }
   };
 
@@ -449,7 +534,7 @@ export default function TeacherDashboard() {
               className="inline-flex items-center gap-2 px-4 py-3 rounded-lg bg-white border border-outline-variant/30 font-bold hover:bg-surface-container-low"
             >
               <User className="w-4 h-4" />
-              Quản lý giáo viên
+              {isAdmin ? 'Quản lý giáo viên' : 'Hồ sơ giảng viên'}
             </button>
             <button
               onClick={fetchAll}
@@ -483,6 +568,7 @@ export default function TeacherDashboard() {
               <div className="px-6 py-4 bg-surface-container-low/50 border-b border-outline-variant/20 shrink-0">
                 <div className="flex gap-2">
                   <select
+                    disabled={!isAdmin}
                     className="flex-1 border border-outline-variant/50 rounded-lg px-3 py-2.5 text-sm bg-white"
                     value={lecturerCode}
                     onChange={(e) => {
@@ -503,6 +589,7 @@ export default function TeacherDashboard() {
                   </select>
                   <input
                     ref={lecturerCodeRef}
+                    disabled={!isAdmin}
                     type="text"
                     placeholder="Mã GV (VD: GV001)"
                     value={lecturerCode}
@@ -516,7 +603,7 @@ export default function TeacherDashboard() {
                   />
                   <button
                     onClick={handleLecturerSearch}
-                    disabled={lecturerLoading || !lecturerCode.trim()}
+                    disabled={(!isAdmin && isLecturer) || lecturerLoading || !lecturerCode.trim()}
                     className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-primary-container text-white font-bold text-sm disabled:opacity-50 shrink-0"
                   >
                     {lecturerLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
@@ -527,7 +614,7 @@ export default function TeacherDashboard() {
 
               {!lecturerFound ? (
                 <div className="px-6 py-10 text-center text-secondary text-sm">
-                  Chọn hoặc nhập mã giáo viên rồi nhấn <strong>Tìm</strong> để bắt đầu.
+                  {isAdmin ? 'Chọn hoặc nhập mã giáo viên rồi nhấn ' : 'Đang mở hồ sơ theo quyền giảng viên hiện tại. '}<strong>{isAdmin ? 'Tìm' : actor.lecturerCode || 'GV'}</strong>{isAdmin ? ' để bắt đầu.' : ''}
                 </div>
               ) : (
                 <>
@@ -665,6 +752,7 @@ export default function TeacherDashboard() {
                             />
                           </div>
                           <select
+                    disabled={!isAdmin}
                             value={availFilter}
                             onChange={(e) => setAvailFilter(e.target.value)}
                             className="border border-outline-variant/50 rounded-lg px-3 py-2 text-sm"
@@ -794,6 +882,7 @@ export default function TeacherDashboard() {
                   <div>
                     <label className="block text-xs font-bold text-secondary uppercase mb-2">Học phần</label>
                     <select
+                    disabled={!isAdmin}
                       value={form.section_id}
                       onChange={(e) => setForm({ ...form, section_id: e.target.value })}
                       className="w-full border border-outline-variant/50 rounded-lg px-4 py-3 text-sm"
@@ -906,6 +995,7 @@ export default function TeacherDashboard() {
                     <option value="draft">Draft</option>
                     <option value="open">Open</option>
                     <option value="closed">Closed</option>
+                    <option value="submitted">Submitted</option>
                   </select>
                 </div>
               </div>
@@ -948,8 +1038,11 @@ export default function TeacherDashboard() {
                             <button onClick={() => handleOpenSession(s.session_id)} disabled={s.status === 'open'} className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-emerald-600 text-white disabled:opacity-50">
                               <Play className="w-4 h-4" />Mở
                             </button>
-                            <button onClick={() => handleCloseSession(s.session_id)} disabled={s.status === 'closed'} className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-rose-600 text-white disabled:opacity-50">
+                            <button onClick={() => handleCloseSession(s.session_id)} disabled={s.status === 'closed' || s.status === 'submitted'} className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-rose-600 text-white disabled:opacity-50">
                               <Square className="w-4 h-4" />Đóng
+                            </button>
+                            <button onClick={() => handleSubmitSession(s.session_id)} disabled={s.status === 'submitted' || s.status === 'draft'} className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-violet-600 text-white disabled:opacity-50">
+                              <CheckCircle2 className="w-4 h-4" />Chốt
                             </button>
                             <button onClick={() => handleExport(s.session_id)} className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-white border border-outline-variant/30 font-semibold">
                               <FileDown className="w-4 h-4" />Export
@@ -1003,19 +1096,51 @@ export default function TeacherDashboard() {
                         <th className="py-3 pr-4">Check-in</th>
                         <th className="py-3 pr-4">Trạng thái</th>
                         <th className="py-3 pr-4">Nhận diện</th>
+                        <th className="py-3 pr-4">Ghi chú</th>
+                        <th className="py-3 pr-4 text-right">Thao tác</th>
                       </tr>
                     </thead>
                     <tbody>
                       {records.map((r, idx) => (
-                        <tr key={`${r.student_code || 'row'}-${idx}`} className="border-b border-outline-variant/10">
+                        <tr key={`${r.student_code || 'row'}-${idx}`} className="border-b border-outline-variant/10 align-top">
                           <td className="py-3 pr-4 font-semibold">{r.student_code || '--'}</td>
                           <td className="py-3 pr-4">{r.student_name || '--'}</td>
                           <td className="py-3 pr-4">{r.class_name || r.class_code || '--'}</td>
                           <td className="py-3 pr-4">{formatDateTime(r.checkin_time)}</td>
                           <td className="py-3 pr-4">
-                            <Badge className={attendanceStatusClass[r.attendance_status] || 'bg-slate-100 text-slate-700'}>{r.attendance_status}</Badge>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge className={attendanceStatusClass[r.attendance_status] || 'bg-slate-100 text-slate-700'}>{r.attendance_status}</Badge>
+                              {r.is_manual_override && (
+                                <Badge className="bg-violet-100 text-violet-700">manual</Badge>
+                              )}
+                            </div>
                           </td>
-                          <td className="py-3 pr-4">{r.recognition_status || '--'}</td>
+                          <td className="py-3 pr-4">
+                            <div>{r.recognition_status || '--'}</div>
+                            {typeof r.confidence_score === 'number' && (
+                              <div className="text-xs text-secondary mt-1">Độ tin cậy: {r.confidence_score}%</div>
+                            )}
+                          </td>
+                          <td className="py-3 pr-4 max-w-56 text-secondary text-xs">{r.note || '--'}</td>
+                          <td className="py-3 pr-4">
+                            <div className="flex flex-wrap justify-end gap-2">
+                              <button
+                                onClick={() => openOverrideModal(r)}
+                                className="px-3 py-2 rounded-lg bg-surface-container-low font-semibold"
+                              >
+                                Chỉnh tay
+                              </button>
+                              {r.is_manual_override && (
+                                <button
+                                  onClick={() => handleClearOverride(r)}
+                                  disabled={overrideSaving}
+                                  className="px-3 py-2 rounded-lg border border-outline-variant/40 font-semibold disabled:opacity-50"
+                                >
+                                  Bỏ override
+                                </button>
+                              )}
+                            </div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -1079,6 +1204,64 @@ export default function TeacherDashboard() {
           </Card>
         )}
 
+
+        {showOverrideModal && (
+          <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-outline-variant/30 overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-outline-variant/20">
+                <div>
+                  <h3 className="text-lg font-black text-on-surface">Chỉnh điểm danh thủ công</h3>
+                  <p className="text-sm text-secondary mt-1">{overrideForm.student_name} • {overrideForm.student_code}</p>
+                </div>
+                <button onClick={closeOverrideModal} className="w-9 h-9 rounded-full hover:bg-surface-container-low flex items-center justify-center">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-5 space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-secondary uppercase mb-2">Trạng thái điểm danh</label>
+                  <select
+                    disabled={!isAdmin}
+                    value={overrideForm.attendance_status}
+                    onChange={(e) => setOverrideForm((prev) => ({ ...prev, attendance_status: e.target.value }))}
+                    className="w-full border border-outline-variant/50 rounded-lg px-4 py-3 text-sm"
+                  >
+                    <option value="early">Đến sớm</option>
+                    <option value="on_time">Đúng giờ</option>
+                    <option value="late">Đi muộn</option>
+                    <option value="absent">Vắng mặt</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-secondary uppercase mb-2">Ghi chú</label>
+                  <textarea
+                    rows="4"
+                    value={overrideForm.note}
+                    onChange={(e) => setOverrideForm((prev) => ({ ...prev, note: e.target.value }))}
+                    placeholder="VD: Sinh viên có mặt nhưng camera nhận diện lỗi"
+                    className="w-full border border-outline-variant/50 rounded-lg px-4 py-3 text-sm resize-none"
+                  />
+                </div>
+              </div>
+
+              <div className="px-5 py-4 border-t border-outline-variant/20 flex flex-wrap gap-3 justify-end bg-surface-container-low/40">
+                <button onClick={closeOverrideModal} className="px-4 py-2.5 rounded-lg border border-outline-variant/40 font-semibold">
+                  Hủy
+                </button>
+                <button
+                  onClick={handleSaveOverride}
+                  disabled={overrideSaving}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-primary-container text-white font-bold disabled:opacity-50"
+                >
+                  {overrideSaving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  {overrideSaving ? 'Đang lưu...' : 'Lưu chỉnh sửa'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </main>
   );

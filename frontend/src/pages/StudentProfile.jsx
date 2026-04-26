@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import api from '../api/client.js';
+import { useAuth } from '../auth/AuthContext.jsx';
 import {
   Search, Upload, CheckCircle2, XCircle, AlertCircle,
   User, Mail, GraduationCap, Save, RefreshCw, Camera, Video, BookOpen, Users,
@@ -69,6 +70,7 @@ function formatSection(section) {
 }
 
 export default function StudentProfile() {
+  const { actor, isAdmin, isStudent } = useAuth();
   const [searchCode, setSearchCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -158,11 +160,12 @@ export default function StudentProfile() {
     }, 'image/jpeg', 0.9);
   };
 
-  const handleSearch = async () => {
-    if (!searchCode.trim()) return;
+  const handleSearch = async (providedCode) => {
+    const effectiveCode = (providedCode || searchCode).trim().toUpperCase();
+    if (!effectiveCode) return;
     setLoading(true);
     try {
-      const res = await api.get(`/students/${searchCode.trim().toUpperCase()}`);
+      const res = await api.get(`/students/${effectiveCode}`);
       const d = res.data.data;
       setForm({
         student_code: d.student_code,
@@ -194,7 +197,7 @@ export default function StudentProfile() {
       setPreviewUrl(null);
       setExistingImageUrl(null);
       if (err.response?.status === 404) {
-        setForm(prev => ({ ...prev, student_code: searchCode.trim().toUpperCase() }));
+        setForm(prev => ({ ...prev, student_code: effectiveCode }));
         showToast('Sinh viên chưa có trong hệ thống. Điền thông tin và đăng ký học phần.', 'error');
       } else {
         showToast('Lỗi kết nối. Kiểm tra backend đang chạy.', 'error');
@@ -277,7 +280,7 @@ export default function StudentProfile() {
   };
 
   const handleReset = () => {
-    setForm({ student_code: '', full_name: '', class_id: '', email: '' });
+    setForm({ student_code: isStudent ? actor.studentCode : '', full_name: '', class_id: '', email: '' });
     setSelectedSections([]);
     setFaceData(null);
     setAIResult(null);
@@ -294,6 +297,9 @@ export default function StudentProfile() {
         <div className="mb-8">
           <h1 className="text-4xl font-black text-on-surface mb-2">Cập nhật thông tin sinh viên</h1>
           <p className="text-secondary">Đăng ký profile, ảnh khuôn mặt và học phần để tham gia đúng các phiên điểm danh giáo viên tạo.</p>
+          {isStudent && (
+            <p className="text-sm text-primary-container font-semibold mt-2">Bạn đang thao tác với quyền sinh viên: {actor.studentCode}. Mã sinh viên được khóa theo phiên hiện tại.</p>
+          )}
         </div>
 
         <div className="bg-white rounded-2xl border border-outline-variant/30 shadow-sm p-6 mb-6">
@@ -307,6 +313,7 @@ export default function StudentProfile() {
                 type="text"
                 placeholder="VD: B23DCCN312"
                 value={searchCode}
+                disabled={isStudent && !isAdmin}
                 onChange={e => setSearchCode(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleSearch()}
                 className="w-full border border-outline-variant/50 rounded-lg pl-10 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-container/30 focus:border-primary-container transition-all uppercase"
@@ -421,7 +428,7 @@ export default function StudentProfile() {
             <h2 className="text-sm font-bold text-secondary uppercase tracking-wider mb-6">Thông tin sinh viên & đăng ký học phần</h2>
 
             <div className="space-y-5">
-              <InputField label="Mã sinh viên *" id="student_code" icon={<GraduationCap className="w-4 h-4" />} value={form.student_code} onChange={e => setForm(p => ({ ...p, student_code: e.target.value.toUpperCase() }))} placeholder="VD: B23DCCN312" />
+              <InputField label="Mã sinh viên *" id="student_code" icon={<GraduationCap className="w-4 h-4" />} value={form.student_code} onChange={e => setForm(p => ({ ...p, student_code: e.target.value.toUpperCase() }))} placeholder="VD: B23DCCN312" disabled={isStudent && !isAdmin} />
               <InputField label="Họ và tên *" id="full_name" icon={<User className="w-4 h-4" />} value={form.full_name} onChange={e => setForm(p => ({ ...p, full_name: e.target.value }))} placeholder="VD: Trần Trung Hiếu" />
 
               <div>

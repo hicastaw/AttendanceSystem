@@ -4,11 +4,12 @@ import FormData from 'form-data';
 import fs from 'fs';
 import pool from '../db.js';
 import { upload } from '../upload.js';
+import { getEffectiveStudentCode, requireRoles, requireStudentSelf, requireStudentSelfOrStaff } from '../middleware/auth.js';
 
 const router = express.Router();
 const AI_URL = process.env.AI_SERVICE_URL || 'http://localhost:8001';
 
-router.get('/classes', async (req, res) => {
+router.get('/classes', requireRoles('admin', 'lecturer', 'student'), async (req, res) => {
   try {
     const result = await pool.query(
       'SELECT class_id, class_name, class_code FROM classes ORDER BY class_name'
@@ -19,7 +20,7 @@ router.get('/classes', async (req, res) => {
   }
 });
 
-router.get('/course-sections', async (req, res) => {
+router.get('/course-sections', requireRoles('admin', 'lecturer', 'student'), async (req, res) => {
   try {
     const { class_id } = req.query;
     const params = [];
@@ -56,8 +57,16 @@ router.get('/course-sections', async (req, res) => {
   }
 });
 
-router.get('/', async (req, res) => {
+router.get('/', requireRoles('admin', 'lecturer'), async (req, res) => {
   try {
+    const params = [];
+    let where = '';
+
+    if (req.actor?.role === 'lecturer') {
+      params.push(req.actor.lecturerCode);
+      where = `WHERE cs.lecturer_id IN (SELECT lecturer_id FROM lecturers WHERE lecturer_code = $${params.length})`;
+    }
+
     const result = await pool.query(`
       SELECT
         s.student_id,
@@ -84,16 +93,17 @@ router.get('/', async (req, res) => {
       LEFT JOIN enrollments e ON e.student_id = s.student_id
       LEFT JOIN course_sections cs ON e.section_id = cs.section_id
       LEFT JOIN courses co ON cs.course_id = co.course_id
+      ${where}
       GROUP BY s.student_id, s.student_code, s.full_name, s.email, s.status, c.class_name, c.class_code, c.class_id, fp.image_path, fp.quality_score, fp.model_name, fp.updated_at, fp.student_id
       ORDER BY s.student_code
-    `);
+    `, params);
     res.json({ status: 'success', data: result.rows });
   } catch (err) {
     res.status(500).json({ status: 'error', message: err.message });
   }
 });
 
-router.get('/:code', async (req, res) => {
+router.get('/:code', requireRoles('admin', 'lecturer', 'student'), requireStudentSelfOrStaff('code'), async (req, res) => {
   try {
     const studentResult = await pool.query(`
       SELECT
@@ -121,6 +131,22 @@ router.get('/:code', async (req, res) => {
     }
 
     const student = studentResult.rows[0];
+
+    if (req.actor?.role === 'lecturer') {
+      const accessResult = await pool.query(`
+        SELECT 1
+        FROM enrollments e
+        JOIN course_sections cs ON cs.section_id = e.section_id
+        JOIN lecturers l ON l.lecturer_id = cs.lecturer_id
+        WHERE e.student_id = $1 AND l.lecturer_code = $2
+        LIMIT 1
+      `, [student.student_id, req.actor.lecturerCode]);
+
+      if (accessResult.rows.length === 0) {
+        return res.status(403).json({ status: 'error', message: 'Bạn không có quyền xem hồ sơ sinh viên này.' });
+      }
+    }
+
     const sectionsResult = await pool.query(`
       SELECT
         e.section_id,
@@ -152,7 +178,7 @@ router.get('/:code', async (req, res) => {
   }
 });
 
-router.post('/face/validate', upload.single('face_image'), async (req, res) => {
+router.post('/face/validate', requireRoles('admin', 'student'), upload.single('face_image'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ status: 'error', message: 'Thiếu file ảnh.' });
   }
@@ -198,10 +224,14 @@ router.post('/face/validate', upload.single('face_image'), async (req, res) => {
   }
 });
 
-router.post('/profile', async (req, res) => {
+router.post('/profile', requireRoles('admin', 'student'), async (req, res) => {
   const { student_code, full_name, class_id, email, face_path, embedding, enrollment_section_ids } = req.body;
+  const effectiveStudent = getEffectiveStudentCode(req, student_code);
+  if (effectiveStudent.error) {
+    return res.status(effectiveStudent.error.status).json({ status: 'error', message: effectiveStudent.error.message });
+  }
 
-  if (!student_code || !full_name || !class_id) {
+  if (!effectiveStudent.studentCode || !full_name || !class_id) {
     return res.status(400).json({
       status: 'error',
       message: 'Thiếu thông tin bắt buộc: student_code, full_name, class_id',
@@ -224,7 +254,7 @@ router.post('/profile', async (req, res) => {
         class_id  = EXCLUDED.class_id,
         email     = EXCLUDED.email
       RETURNING student_id, student_code, class_id
-    `, [student_code.toUpperCase(), full_name, class_id, email || null]);
+    `, [effectiveStudent.studentCode.toUpperCase(), full_name, class_id, email || null]);
 
     const { student_id, student_code: code, class_id: resolvedClassId } = studentResult.rows[0];
 
@@ -292,7 +322,7 @@ router.post('/profile', async (req, res) => {
   }
 });
 
-router.put('/:code', async (req, res) => {
+router.put('/:code', requireRoles('admin', 'student'), requireStudentSelf('code'), async (req, res) => {
   const { full_name, class_id, email, status } = req.body;
   try {
     const result = await pool.query(`

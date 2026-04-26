@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import api from '../api/client.js';
+import { useAuth } from '../auth/AuthContext.jsx';
 import {
   Camera,
   CameraOff,
@@ -158,6 +159,7 @@ function LogItem({ entry }) {
 }
 
 export default function AttendanceScan() {
+  const { actor, isAdmin, isStudent } = useAuth();
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
@@ -242,9 +244,14 @@ export default function AttendanceScan() {
   };
 
   useEffect(() => {
-    loadOpenSessions('');
+    const initialCode = isStudent ? actor.studentCode : '';
+    if (initialCode) {
+      setStudentCodeInput(initialCode);
+      setStudentCode(initialCode);
+    }
+    loadOpenSessions(initialCode);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [actor.studentCode, isStudent]);
 
   const handleFindSessions = async () => {
     const normalized = studentCodeInput.trim().toUpperCase();
@@ -316,6 +323,9 @@ export default function AttendanceScan() {
           <p className="text-secondary max-w-3xl">
             Chọn đúng phiên mà giáo viên đã mở cho lớp của bạn, bật camera và thực hiện check-in một lần để hệ thống ghi nhận trạng thái điểm danh.
           </p>
+          {isStudent && (
+            <p className="text-sm text-primary-container font-semibold mt-2">Bạn đang thao tác với quyền sinh viên: {actor.studentCode}. Mã sinh viên sẽ được tự khóa theo phiên hiện tại.</p>
+          )}
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
@@ -334,6 +344,7 @@ export default function AttendanceScan() {
                       <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-secondary" />
                       <input
                         value={studentCodeInput}
+                        disabled={isStudent && !isAdmin}
                         onChange={(e) => setStudentCodeInput(e.target.value.toUpperCase())}
                         placeholder="VD: B22DCCN001"
                         className="w-full rounded-xl border border-outline-variant/40 pl-10 pr-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-container/25"

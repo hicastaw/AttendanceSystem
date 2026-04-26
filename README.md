@@ -4,6 +4,15 @@ Hệ thống điểm danh tự động sử dụng nhận diện khuôn mặt, x
 
 ---
 
+
+## ✅ Nâng cấp đã bổ sung trong bản hoàn chỉnh
+
+- Thêm **manual override** cho bản ghi điểm danh trong Dashboard giáo viên.
+- Thêm nút **chốt phiên (submit)** để khóa nghiệp vụ sau khi đã kiểm tra kết quả.
+- Sửa API **global sessions** để tạo phiên hợp lệ theo nhiều học phần, không còn xung đột `section_id NOT NULL`.
+- Hoàn thiện luồng **hủy manual override** để hệ thống tự tính lại trạng thái theo dữ liệu check-in gốc.
+- Kiểm tra lại frontend và build thành công bằng Vite production build.
+
 ## 📋 Yêu cầu hệ thống
 
 | Công cụ | Phiên bản khuyến nghị |
