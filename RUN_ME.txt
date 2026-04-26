@@ -1,0 +1,36 @@
+Run full system with Docker:
+1) cd AttendanceSystem_completed
+2) docker compose up --build
+3) Open frontend: http://localhost:5173
+4) Teacher dashboard: http://localhost:5173/teacher
+
+Run locally without Docker:
+Backend:
+  cd backend
+  npm install
+  npm run dev
+Frontend:
+  cd frontend
+  npm install
+  npm run dev
+AI service:
+  cd backend/ai
+  pip install -r requirements.txt
+  uvicorn main:app --host 0.0.0.0 --port 8001
+Database:
+  run PostgreSQL 16 + pgvector, then execute SQL in backend/database/docker-entrypoint-initdb.d in order.
+
+
+=== DU LIEU DEMO ===
+Project da duoc bo sung bo du lieu ao day du o file:
+- backend/database/database/seeds/001_seed_demo.sql
+- backend/database/database/scripts/reseed_demo.sql
+
+Neu muon khoi tao lai toan bo du lieu demo bang Docker:
+1. docker compose down -v
+2. docker compose up --build
+
+Sau khi chay, vao trang giao vien de xem danh sach hoc phan, phien diem danh, sinh vien va bao cao demo.
+
+
+Bo du lieu hien tai da duoc nang cap len 160 sinh vien, 16 hoc phan va 64 phien diem danh de demo quy mo lon hon.

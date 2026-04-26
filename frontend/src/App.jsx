@@ -3,6 +3,7 @@ import { Header, Footer } from './components/Layout.jsx';
 import Home from './pages/Home.jsx';
 import StudentProfile from './pages/StudentProfile.jsx';
 import AttendanceScan from './pages/AttendanceScan.jsx';
+import TeacherDashboard from './pages/TeacherDashboard.jsx';
 
 export default function App() {
   return (
@@ -11,6 +12,7 @@ export default function App() {
         <Header />
         <Routes>
           <Route path="/"        element={<Home />} />
+          <Route path="/teacher" element={<TeacherDashboard />} />
           <Route path="/profile" element={<StudentProfile />} />
           <Route path="/scan"    element={<AttendanceScan />} />
           
