@@ -408,11 +408,12 @@ router.post('/recognize', uploadMemory.single('frame'), async (req, res) => {
 
     const aiData = aiResponse.data;
 
+    // sửa backend trả về lỗi chi tiết hơn
     if (!aiData.found) {
       return res.json({
         status: 'no_face',
-        message: 'Không phát hiện khuôn mặt.',
-        recognized: false,
+        message: aiData.message || 'Không phát hiện khuôn mặt.', 
+        error_code: aiData.error_code, 
       });
     }
 
@@ -451,6 +452,7 @@ router.post('/recognize', uploadMemory.single('frame'), async (req, res) => {
     const best = matchResult.rows[0];
     const similarityPercent = Math.round(best.similarity * 10000) / 100;
 
+    // giảm threshold để không bỏ sót mặt
     if (similarityPercent < 60) {
       return res.json({
         status: 'low_confidence',

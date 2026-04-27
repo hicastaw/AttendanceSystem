@@ -1,26 +1,15 @@
-"""
-AI Service — FastAPI
-Wraps FaceEngine thành HTTP API để backend Node.js gọi vào.
-
-Endpoints:
-    POST /ai/face/validate  - Kiểm tra + trích embedding (dùng cho enrollment)
-    POST /ai/face/extract   - Trích embedding từ frame (dùng cho nhận diện realtime)
-"""
-
 import sys
 import os
-import io
 import numpy as np
 import cv2
 
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-# Add core to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from core.face_engine import FaceEngine
 
-app = FastAPI(title="AttendanceSystem AI Service", version="1.0.0")
+app = FastAPI(title="PTIT Attendance AI Service", version="2.2.1")
 
 app.add_middleware(
     CORSMiddleware,
@@ -29,146 +18,144 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Singleton FaceEngine
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 Megabytes
+ALLOWED_FORMATS = ["image/jpeg", "image/png", "image/jpg"]
+
 engine = FaceEngine()
 
+def validate_upload_file(file: UploadFile):
+    """Kiểm tra dung lượng và định dạng file trước khi xử lý."""
+    if file.content_type not in ALLOWED_FORMATS:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Định dạng {file.content_type} không hỗ trợ. Chỉ nhận JPG/PNG."
+        )
+    
+    if file.size > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=413, 
+            detail=f"File quá lớn ({file.size / 1024 / 1024:.2f}MB). Giới hạn tối đa là 10MB."
+        )
 
 def decode_image(file_bytes: bytes) -> np.ndarray:
-    """Decode bytes thành OpenCV BGR image."""
     nparr = np.frombuffer(file_bytes, np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     if img is None:
-        raise HTTPException(status_code=400, detail="Không thể đọc file ảnh.")
+        raise HTTPException(status_code=400, detail="Không thể đọc dữ liệu hình ảnh.")
     return img
-
 
 @app.get("/")
 def health_check():
     return {"status": "ok", "service": "AttendanceSystem AI Service"}
 
-
 @app.post("/ai/face/validate")
-async def validate_face(face_image: UploadFile = File(...)):
-    """
-    Kiểm tra ảnh khuôn mặt để đăng ký (enrollment).
-    - Detect khuôn mặt
-    - Kiểm tra độ sắc nét (sharpness)
-    - Trích embedding
+def validate_face(face_image: UploadFile = File(...)):
+    validate_upload_file(face_image)
     
-    Returns:
-        is_valid: bool
-        embedding: list[float] | None
-        sharpness_score: float
-        message: str
-    """
-    file_bytes = await face_image.read()
+    file_bytes = face_image.file.read()
     img_bgr = decode_image(file_bytes)
-    img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-
-    # Detect + extract embedding
-    embedding = engine.extract_face_embedding(img_rgb)
-
-    if embedding is None:
-        # Thử check sharpness riêng để trả lỗi chi tiết hơn
-        h, w, _ = img_bgr.shape
-        engine.detector.setInputSize((w, h))
-        _, faces = engine.detector.detect(img_rgb)
-
-        if faces is None or len(faces) == 0:
-            return {
-                "is_valid": False,
-                "embedding": None,
-                "sharpness_score": 0.0,
-                "message": "Không phát hiện khuôn mặt trong ảnh. Vui lòng chụp lại.",
-                "error_code": "NO_FACE_DETECTED"
-            }
-
-        # Có face nhưng bị blur
-        face = faces[0]
-        aligned = engine.align_face(img_rgb, face)
-        sharpness = engine.calculate_shapeness(aligned)
-
-        return {
-            "is_valid": False,
-            "embedding": None,
-            "sharpness_score": round(float(sharpness), 2),
-            "message": f"Ảnh không phù hợp, yêu cầu chụp lại. (Độ sắc nét: {sharpness:.1f} < 100)",
-            "error_code": "BLURRY_IMAGE"
-        }
-
-    # Tính sharpness để trả về thông tin
-    h, w, _ = img_bgr.shape
-    engine.detector.setInputSize((w, h))
-    _, faces = engine.detector.detect(img_rgb)
-    sharpness = 0.0
-    if faces is not None and len(faces) > 0:
-        aligned = engine.align_face(img_rgb, faces[0])
-        sharpness = engine.calculate_shapeness(aligned)
-
-    return {
-        "is_valid": True,
-        "embedding": embedding.tolist(),
-        "sharpness_score": round(float(sharpness), 2),
-        "message": "Ảnh hợp lệ. Khuôn mặt được nhận diện thành công.",
-        "error_code": None
-    }
-
-
-@app.post("/ai/face/extract")
-async def extract_face(face_image: UploadFile = File(...)):
-    """
-    Trích embedding từ ảnh/frame realtime (dùng cho điểm danh).
-    Không kiểm tra sharpness nghiêm ngặt, chỉ cần detect được mặt.
-
-    Returns:
-        found: bool
-        embedding: list[float] | None
-        sharpness_score: float
-        confidence: float  (score detect từ YuNet, 0.0–1.0)
-    """
-    file_bytes = await face_image.read()
-    img_bgr = decode_image(file_bytes)
-    img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
 
     h, w, _ = img_bgr.shape
     engine.detector.setInputSize((w, h))
-    _, faces = engine.detector.detect(img_rgb)
+    _, faces = engine.detector.detect(img_bgr)
 
     if faces is None or len(faces) == 0:
         return {
-            "found": False,
+            "is_valid": False,
             "embedding": None,
             "sharpness_score": 0.0,
-            "confidence": 0.0
+            "liveness_score": 0.0,
+            "message": "Không phát hiện khuôn mặt trong ảnh. Vui lòng chụp lại.",
+            "error_code": "NO_FACE_DETECTED"
         }
 
     face = faces[0]
     confidence = float(face[-1])
 
-    if confidence < 0.8:
+    if confidence < 0.80:
+        return {
+            "is_valid": False,
+            "embedding": None,
+            "sharpness_score": 0.0,
+            "liveness_score": 0.0,
+            "message": "Ảnh không rõ mặt người thật. Vui lòng chụp lại.",
+            "error_code": "LOW_CONFIDENCE"
+        }
+
+    aligned = engine.align_face(img_bgr, face)
+    
+    sharpness = engine.calculate_shapeness(aligned)
+    if sharpness < 100.0:
+        return {
+            "is_valid": False,
+            "embedding": None,
+            "sharpness_score": round(float(sharpness), 2),
+            "liveness_score": 0.0,
+            "message": f"Ảnh quá mờ, yêu cầu chụp lại. (Độ sắc nét: {sharpness:.1f})",
+            "error_code": "BLURRY_IMAGE"
+        }
+
+    embedding = engine.get_face_embedding(aligned)
+
+    return {
+        "is_valid": True,
+        "embedding": embedding.tolist(),
+        "sharpness_score": round(float(sharpness), 2),
+        "message": "Ảnh hợp lệ. Khuôn mặt được xác nhận là người thật.",
+        "error_code": None
+    }
+
+@app.post("/ai/face/extract")
+def extract_face(face_image: UploadFile = File(...)):
+    validate_upload_file(face_image)
+    
+    file_bytes = face_image.file.read()
+    img_bgr = decode_image(file_bytes)
+
+    h, w, _ = img_bgr.shape
+    engine.detector.setInputSize((w, h))
+    _, faces = engine.detector.detect(img_bgr)
+
+    if faces is None or len(faces) == 0:
         return {
             "found": False,
             "embedding": None,
-            "sharpness_score": 0.0,
-            "confidence": round(confidence, 4)
+            "liveness_score": 0.0,
+            "error_code": "NO_FACE"
         }
 
-    aligned = engine.align_face(img_rgb, face)
-    sharpness = engine.calculate_shapeness(aligned)
+    face = faces[0]
+    confidence = float(face[-1])
+    
+    if confidence < 0.80:
+        return {
+            "found": False,
+            "embedding": None,
+            "liveness_score": 0.0,
+            "error_code": "LOW_CONFIDENCE"
+        }
 
-    # Extract embedding (dù blur vẫn lấy, để backend tự quyết định via DB function)
-    blob = cv2.dnn.blobFromImage(
-        aligned, 1.0 / 127.5, (112, 112), (127.5, 127.5, 127.5), swapRB=True
-    )
-    net_out = engine.rec_session.run(None, {engine.input_name: blob})[0]
-    embedding = net_out.flatten()
-    norm = np.linalg.norm(embedding)
-    if norm > 0:
-        embedding = embedding / norm
+    aligned = engine.align_face(img_bgr, face)
+    
+    sharpness = engine.calculate_shapeness(aligned)
+    
+    is_real, liveness_score = engine.check_liveness(img_bgr, face)
+    if not is_real:
+        return {
+            "found": False, 
+            "embedding": None,
+            "sharpness_score": round(float(sharpness), 2),
+            "liveness_score": round(float(liveness_score), 4),
+            "message": "Phát hiện giả mạo! Vui lòng không sử dụng điện thoại hoặc ảnh chụp.",
+            "error_code": "SPOOFING_DETECTED"
+        }
+
+    embedding = engine.get_face_embedding(aligned)
 
     return {
         "found": True,
         "embedding": embedding.tolist(),
         "sharpness_score": round(float(sharpness), 2),
+        "liveness_score": round(float(liveness_score), 4),
         "confidence": round(confidence, 4)
     }
