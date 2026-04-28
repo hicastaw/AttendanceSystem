@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthContext.jsx';
 import {
   Upload, CheckCircle2, XCircle, AlertCircle,
   User, Mail, GraduationCap, Save, RefreshCw, Camera, Video, BookOpen, Users,
+  Search, UserSearch,
 } from 'lucide-react';
 
 function AIBadge({ result }) {
@@ -77,6 +78,10 @@ export default function StudentProfile() {
   const [toast, setToast] = useState(null);
   const [dataLoaded, setDataLoaded] = useState(false);
 
+  // Admin-only: search by student code
+  const [searchCode, setSearchCode] = useState('');
+  const [searching, setSearching] = useState(false);
+
   const [classes, setClasses] = useState([]);
   const [allSections, setAllSections] = useState([]);
   const [form, setForm] = useState({ student_code: '', full_name: '', class_id: '', email: '' });
@@ -125,6 +130,21 @@ export default function StudentProfile() {
   }, [toast]);
 
   const showToast = (message, type = 'success') => setToast({ message, type });
+
+  // Admin-only: search a student by code
+  const handleSearch = async () => {
+    const code = searchCode.trim().toUpperCase();
+    if (!code) return showToast('Vui lòng nhập mã sinh viên để tra cứu.', 'error');
+    setSearching(true);
+    try {
+      await loadStudentData(code);
+      showToast(`Đã tải hồ sơ sinh viên: ${code}`);
+    } catch {
+      showToast('Không tìm thấy sinh viên với mã này.', 'error');
+    } finally {
+      setSearching(false);
+    }
+  };
 
   const classSections = useMemo(() => {
     if (!form.class_id) return [];
@@ -300,6 +320,55 @@ export default function StudentProfile() {
             <p className="text-sm text-primary-container font-semibold mt-2">Bạn đang thao tác với quyền sinh viên: {actor.studentCode}. Mã sinh viên được khóa theo phiên hiện tại.</p>
           )}
         </div>
+
+        {/* ── Admin-only: Student Lookup Panel ── */}
+        {isAdmin && (
+          <div className="mb-8 bg-white rounded-2xl border border-outline-variant/30 shadow-sm p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-9 h-9 rounded-xl bg-indigo-100 flex items-center justify-center shrink-0">
+                <UserSearch className="w-5 h-5 text-indigo-600" />
+              </div>
+              <div>
+                <h2 className="text-sm font-bold text-on-surface">Tra cứu sinh viên</h2>
+                <p className="text-xs text-secondary">Nhập mã sinh viên để tải hồ sơ và chỉnh sửa thông tin.</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <div className="relative flex-1">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary">
+                  <GraduationCap className="w-4 h-4" />
+                </div>
+                <input
+                  id="admin-search-code"
+                  type="text"
+                  value={searchCode}
+                  onChange={e => setSearchCode(e.target.value.toUpperCase())}
+                  onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                  placeholder="VD: B23DCCN312"
+                  className="w-full bg-white border border-outline-variant/50 rounded-lg pl-10 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition-all"
+                />
+              </div>
+              <button
+                id="admin-search-btn"
+                onClick={handleSearch}
+                disabled={searching || loading}
+                className="flex items-center gap-2 bg-indigo-600 text-white font-bold px-6 py-3 rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm shadow-sm"
+              >
+                {searching
+                  ? <RefreshCw className="w-4 h-4 animate-spin" />
+                  : <Search className="w-4 h-4" />
+                }
+                {searching ? 'Đang tìm...' : 'Tìm kiếm'}
+              </button>
+            </div>
+            {dataLoaded && form.student_code && (
+              <div className="mt-3 flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                Đang hiển thị hồ sơ của sinh viên: <span className="font-bold">{form.student_code}</span>
+              </div>
+            )}
+          </div>
+        )}
 
         {loading && (
           <div className="flex items-center justify-center gap-3 py-10 text-secondary">
