@@ -267,3 +267,84 @@ export async function changeUserPassword(authUserId, newPassword, markMustChange
     [authUserId, passwordHash, Boolean(markMustChangePassword)]
   );
 }
+
+/**
+ * Đăng ký tài khoản mới cho sinh viên hoặc giảng viên.
+ * Người dùng phải có bản ghi trong bảng students/lecturers trước.
+ */
+export async function registerUser({ role, code, username, password }) {
+  if (!['student', 'lecturer'].includes(role)) {
+    const err = new Error('Chỉ hỗ trợ đăng ký tài khoản sinh viên hoặc giảng viên.');
+    err.status = 400;
+    throw err;
+  }
+
+  const normalizedCode = String(code || '').trim().toUpperCase();
+  const normalizedUsername = String(username || '').trim().toLowerCase();
+
+  // Tìm sinh viên / giảng viên theo mã
+  let entityId;
+  let entityColumn;
+  if (role === 'student') {
+    const result = await pool.query(
+      `SELECT student_id FROM students WHERE upper(student_code) = $1`,
+      [normalizedCode]
+    );
+    if (result.rows.length === 0) {
+      const err = new Error('Không tìm thấy sinh viên với mã này trong hệ thống.');
+      err.status = 404;
+      throw err;
+    }
+    entityId = result.rows[0].student_id;
+    entityColumn = 'student_id';
+  } else {
+    const result = await pool.query(
+      `SELECT lecturer_id FROM lecturers WHERE upper(lecturer_code) = $1`,
+      [normalizedCode]
+    );
+    if (result.rows.length === 0) {
+      const err = new Error('Không tìm thấy giảng viên với mã này trong hệ thống.');
+      err.status = 404;
+      throw err;
+    }
+    entityId = result.rows[0].lecturer_id;
+    entityColumn = 'lecturer_id';
+  }
+
+  // Kiểm tra xem mã này đã có tài khoản chưa
+  const existingByEntity = await pool.query(
+    `SELECT auth_user_id FROM auth_users WHERE ${entityColumn} = $1`,
+    [entityId]
+  );
+  if (existingByEntity.rows.length > 0) {
+    const err = new Error(
+      role === 'student'
+        ? 'Mã sinh viên này đã được liên kết với một tài khoản. Vui lòng đăng nhập hoặc liên hệ quản trị viên.'
+        : 'Mã giảng viên này đã được liên kết với một tài khoản. Vui lòng đăng nhập hoặc liên hệ quản trị viên.'
+    );
+    err.status = 409;
+    throw err;
+  }
+
+  // Kiểm tra username đã tồn tại chưa
+  const existingByUsername = await pool.query(
+    `SELECT auth_user_id FROM auth_users WHERE lower(username) = $1`,
+    [normalizedUsername]
+  );
+  if (existingByUsername.rows.length > 0) {
+    const err = new Error('Tên đăng nhập này đã được sử dụng. Vui lòng chọn tên khác.');
+    err.status = 409;
+    throw err;
+  }
+
+  // Tạo tài khoản mới
+  const passwordHash = hashPassword(password);
+  const insertResult = await pool.query(
+    `INSERT INTO auth_users (username, password_hash, role, ${entityColumn}, is_active, must_change_password)
+     VALUES ($1, $2, $3, $4, TRUE, FALSE)
+     RETURNING auth_user_id`,
+    [normalizedUsername, passwordHash, role, entityId]
+  );
+
+  return insertResult.rows[0].auth_user_id;
+}

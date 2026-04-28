@@ -62,12 +62,9 @@ router.get('/sections', requireRoles('admin', 'lecturer'), async (req, res) => {
   }
 });
 
-router.get('/open-sessions', requireRoles('admin', 'student'), async (req, res) => {
-  const effectiveStudent = getEffectiveStudentCode(req, req.query.student_code);
-  if (effectiveStudent.error) {
-    return res.status(effectiveStudent.error.status).json({ status: 'error', message: effectiveStudent.error.message });
-  }
-  const studentCode = effectiveStudent.studentCode;
+router.get('/open-sessions', requireRoles('admin', 'lecturer'), async (req, res) => {
+  // Admin and lecturer can filter by student_code optionally
+  const studentCode = req.query.student_code ? String(req.query.student_code).trim().toUpperCase() : null;
 
   try {
     const params = [];
@@ -529,13 +526,10 @@ router.get('/sessions/:id/export', requireRoles('admin', 'lecturer'), ensureLect
   }
 });
 
-router.post('/recognize', requireRoles('admin', 'student'), uploadMemory.single('frame'), async (req, res) => {
+router.post('/recognize', requireRoles('admin', 'lecturer'), uploadMemory.single('frame'), async (req, res) => {
   const { session_id } = req.body;
-  const effectiveStudent = getEffectiveStudentCode(req, req.body?.student_code);
-  if (effectiveStudent.error) {
-    return res.status(effectiveStudent.error.status).json({ status: 'error', message: effectiveStudent.error.message });
-  }
-  const student_code = effectiveStudent.studentCode;
+  // Admin/lecturer can optionally pass student_code to narrow down recognition
+  const student_code = req.body?.student_code ? String(req.body.student_code).trim().toUpperCase() : null;
 
   if (!session_id) {
     return res.status(400).json({ status: 'error', message: 'Thiếu session_id.' });

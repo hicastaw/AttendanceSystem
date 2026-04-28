@@ -145,14 +145,25 @@ function AccountModal({ open, onClose }) {
 }
 
 export function Header() {
-  const { actor, isAuthenticated } = useAuth();
+  const { actor, isAuthenticated, isAdmin, isLecturer, isStudent } = useAuth();
   const [showAccountModal, setShowAccountModal] = useState(false);
 
-  const navItems = useMemo(() => [
-    { to: '/teacher', label: 'Giáo viên', icon: <LayoutDashboard className="w-4 h-4" /> },
-    { to: '/profile', label: 'Cập nhật Profile', icon: <BookUser className="w-4 h-4" /> },
-    { to: '/scan', label: 'Điểm danh', icon: <ScanFace className="w-4 h-4" /> },
-  ], []);
+  const navItems = useMemo(() => {
+    if (!isAuthenticated) return [];
+    if (isAdmin) return [
+      { to: '/teacher', label: 'Giáo viên', icon: <LayoutDashboard className="w-4 h-4" /> },
+      { to: '/profile', label: 'Cập nhật Profile', icon: <BookUser className="w-4 h-4" /> },
+      { to: '/scan', label: 'Điểm danh', icon: <ScanFace className="w-4 h-4" /> },
+    ];
+    if (isLecturer) return [
+      { to: '/teacher', label: 'Giáo viên', icon: <LayoutDashboard className="w-4 h-4" /> },
+      { to: '/scan', label: 'Điểm danh', icon: <ScanFace className="w-4 h-4" /> },
+    ];
+    if (isStudent) return [
+      { to: '/profile', label: 'Cập nhật Profile', icon: <BookUser className="w-4 h-4" /> },
+    ];
+    return [];
+  }, [isAuthenticated, isAdmin, isLecturer, isStudent]);
 
   return (
     <>
@@ -197,7 +208,7 @@ export function Header() {
             ) : (
               <Link
                 to="/login"
-                className="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary-container text-white font-bold"
+                className="hidden sm:inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary-container text-white font-bold hover:opacity-90 transition-all shadow-sm"
               >
                 <LogIn className="w-4 h-4" />
                 Đăng nhập

@@ -1,12 +1,91 @@
 import { Link } from 'react-router-dom';
-import { ScanFace, BookUser, ChevronRight, Shield, Zap, BarChart3, LayoutDashboard } from 'lucide-react';
+import { ScanFace, BookUser, ChevronRight, Shield, Zap, BarChart3, LayoutDashboard, LogIn } from 'lucide-react';
+import { useAuth } from '../auth/AuthContext.jsx';
 
 export default function Home() {
+  const { isAuthenticated, isAdmin, isLecturer, isStudent } = useAuth();
+
   const features = [
     { icon: <Shield className="w-6 h-6" />, title: 'Nhận diện chính xác', desc: 'Model AI YuNet + MBF độ chính xác > 85%, kháng nhiễu ảnh mờ.' },
     { icon: <Zap className="w-6 h-6" />, title: 'Realtime', desc: 'Quét liên tục qua camera, ghi nhận điểm danh tức thì.' },
     { icon: <BarChart3 className="w-6 h-6" />, title: 'Thống kê đầy đủ', desc: 'Phân loại đúng giờ, đi muộn, vắng mặt, lưu lịch sử toàn bộ.' },
   ];
+
+  const renderHeroButtons = () => {
+    if (!isAuthenticated) {
+      return (
+        <Link
+          to="/login"
+          className="flex items-center justify-center gap-2 bg-white text-primary-container font-bold px-10 py-4 rounded-xl shadow-xl hover:shadow-2xl hover:scale-105 transition-all"
+        >
+          <LogIn className="w-5 h-5" />
+          Đăng nhập ngay
+          <ChevronRight className="w-4 h-4" />
+        </Link>
+      );
+    }
+    if (isStudent) {
+      return (
+        <Link
+          to="/profile"
+          className="flex items-center justify-center gap-2 bg-white text-primary-container font-bold px-8 py-4 rounded-xl shadow-xl hover:shadow-2xl hover:scale-105 transition-all"
+        >
+          <BookUser className="w-5 h-5" />
+          Cập nhật Profile
+          <ChevronRight className="w-4 h-4" />
+        </Link>
+      );
+    }
+    if (isLecturer) {
+      return (
+        <>
+          <Link
+            to="/teacher"
+            className="flex items-center justify-center gap-2 bg-black/20 backdrop-blur border-2 border-white/30 font-bold px-8 py-4 rounded-xl hover:bg-black/30 transition-all"
+          >
+            <LayoutDashboard className="w-5 h-5" />
+            Trang giáo viên
+          </Link>
+          <Link
+            to="/scan"
+            className="flex items-center justify-center gap-2 bg-white/20 backdrop-blur border-2 border-white/40 font-bold px-8 py-4 rounded-xl hover:bg-white/30 transition-all"
+          >
+            <ScanFace className="w-5 h-5" />
+            Bắt đầu điểm danh
+          </Link>
+        </>
+      );
+    }
+    if (isAdmin) {
+      return (
+        <>
+          <Link
+            to="/profile"
+            className="flex items-center justify-center gap-2 bg-white text-primary-container font-bold px-8 py-4 rounded-xl shadow-xl hover:shadow-2xl hover:scale-105 transition-all"
+          >
+            <BookUser className="w-5 h-5" />
+            Cập nhật Profile
+            <ChevronRight className="w-4 h-4" />
+          </Link>
+          <Link
+            to="/scan"
+            className="flex items-center justify-center gap-2 bg-white/20 backdrop-blur border-2 border-white/40 font-bold px-8 py-4 rounded-xl hover:bg-white/30 transition-all"
+          >
+            <ScanFace className="w-5 h-5" />
+            Bắt đầu điểm danh
+          </Link>
+          <Link
+            to="/teacher"
+            className="flex items-center justify-center gap-2 bg-black/20 backdrop-blur border-2 border-white/30 font-bold px-8 py-4 rounded-xl hover:bg-black/30 transition-all"
+          >
+            <LayoutDashboard className="w-5 h-5" />
+            Trang giáo viên
+          </Link>
+        </>
+      );
+    }
+    return null;
+  };
 
   return (
     <main className="flex-grow">
@@ -28,28 +107,7 @@ export default function Home() {
             Chính xác, nhanh chóng, không gian lận.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link
-              to="/profile"
-              className="flex items-center justify-center gap-2 bg-white text-primary-container font-bold px-8 py-4 rounded-xl shadow-xl hover:shadow-2xl hover:scale-105 transition-all"
-            >
-              <BookUser className="w-5 h-5" />
-              Cập nhật Profile
-              <ChevronRight className="w-4 h-4" />
-            </Link>
-            <Link
-              to="/scan"
-              className="flex items-center justify-center gap-2 bg-white/20 backdrop-blur border-2 border-white/40 font-bold px-8 py-4 rounded-xl hover:bg-white/30 transition-all"
-            >
-              <ScanFace className="w-5 h-5" />
-              Bắt đầu điểm danh
-            </Link>
-            <Link
-              to="/teacher"
-              className="flex items-center justify-center gap-2 bg-black/20 backdrop-blur border-2 border-white/30 font-bold px-8 py-4 rounded-xl hover:bg-black/30 transition-all"
-            >
-              <LayoutDashboard className="w-5 h-5" />
-              Trang giáo viên
-            </Link>
+            {renderHeroButtons()}
           </div>
         </div>
       </section>

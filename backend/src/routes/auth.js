@@ -4,6 +4,7 @@ import {
   createAccessToken,
   findAuthUserByIdentifier,
   getAuthUserById,
+  registerUser,
   updateLastLogin,
   verifyPassword,
 } from '../services/auth.js';
@@ -114,6 +115,53 @@ router.post('/change-password', requireAuthenticated, async (req, res) => {
     });
   } catch (err) {
     return res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+router.post('/register', async (req, res) => {
+  const role = String(req.body?.role || '').trim().toLowerCase();
+  const code = String(req.body?.code || '').trim();
+  const username = String(req.body?.username || '').trim();
+  const password = String(req.body?.password || '');
+
+  if (!role || !code || !username || !password) {
+    return res.status(400).json({ status: 'error', message: 'Vui lòng điền đầy đủ tất cả thông tin.' });
+  }
+
+  if (!['student', 'lecturer'].includes(role)) {
+    return res.status(400).json({ status: 'error', message: 'Vai trò không hợp lệ. Chỉ chấp nhận student hoặc lecturer.' });
+  }
+
+  if (username.length < 4) {
+    return res.status(400).json({ status: 'error', message: 'Tên đăng nhập phải có ít nhất 4 ký tự.' });
+  }
+
+  if (!/^[a-zA-Z0-9._-]+$/.test(username)) {
+    return res.status(400).json({ status: 'error', message: 'Tên đăng nhập chỉ được chứa chữ cái, số và ký tự . _ -' });
+  }
+
+  if (password.length < 8) {
+    return res.status(400).json({ status: 'error', message: 'Mật khẩu phải có ít nhất 8 ký tự.' });
+  }
+
+  try {
+    const newUserId = await registerUser({ role, code, username, password });
+    const user = await getAuthUserById(newUserId);
+    await updateLastLogin(newUserId);
+    const token = createAccessToken(user);
+
+    return res.status(201).json({
+      status: 'success',
+      message: 'Đăng ký tài khoản thành công.',
+      data: {
+        access_token: token,
+        token_type: 'Bearer',
+        user: sanitizeUser(user),
+      },
+    });
+  } catch (err) {
+    const status = err.status || 500;
+    return res.status(status).json({ status: 'error', message: err.message });
   }
 });
 

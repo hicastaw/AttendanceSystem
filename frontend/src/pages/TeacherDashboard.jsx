@@ -125,7 +125,7 @@ export default function TeacherDashboard() {
   const [form, setForm] = useState({
     section_id: '',
     session_title: '',
-    session_date: new Date().toISOString().slice(0, 10),
+    session_date: new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }),
     start_time: '07:00',
     end_time: '09:00',
     late_after_minutes: 15,
