@@ -649,13 +649,16 @@ router.post('/recognize', requireRoles('admin', 'lecturer'), uploadMemory.single
       });
     }
 
+    // Generate checkin time in Vietnam timezone (YYYY-MM-DDTHH:mm:ss format)
+    const vnCheckinTime = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' }).replace(' ', 'T');
+
     const upsertResult = await pool.query(
       'SELECT * FROM upsert_attendance_record($1, $2, $3, $4, $5, $6, $7)',
       [
         session.session_id,
         best.student_id,
         null,
-        new Date().toISOString(),
+        vnCheckinTime,
         similarityPercent,
         aiData.sharpness_score || null,
         'matched',

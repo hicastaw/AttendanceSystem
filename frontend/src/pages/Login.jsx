@@ -165,12 +165,8 @@ export default function Login() {
             <Link to="/" className="font-bold text-primary-container">Về trang chủ</Link>
           </div>
 
-          <div className="mt-3 pt-4 border-t border-outline-variant/20 text-sm text-center text-secondary">
-            Chưa có tài khoản?{' '}
-            <Link to="/register" className="font-bold text-primary-container hover:opacity-80">
-              Đăng ký ngay →
-            </Link>
-          </div>
+
+
         </section>
       </div>
     </main>
