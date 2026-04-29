@@ -597,11 +597,12 @@ router.post('/recognize', requireRoles('admin', 'lecturer'), uploadMemory.single
 
     const aiData = aiResponse.data;
 
+    // sửa backend trả về lỗi chi tiết hơn
     if (!aiData.found) {
       return res.json({
         status: 'no_face',
-        message: 'Không phát hiện khuôn mặt.',
-        recognized: false,
+        message: aiData.message || 'Không phát hiện khuôn mặt.', 
+        error_code: aiData.error_code, 
       });
     }
 
