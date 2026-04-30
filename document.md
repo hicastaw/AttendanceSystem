@@ -80,23 +80,43 @@ AttendanceSystem/
 │       ├── requirements.txt
 │       ├── core/face_engine.py
 │       └── model/*.onnx
-├── document.md                  # Tài liệu dự án
-└── README.md
+├── docker-compose.yml           # Cấu hình Docker Deploy toàn bộ hệ thống
+├── document.md                  # Tài liệu dự án chi tiết
+└── README.md                    # Hướng dẫn khởi động nhanh
 ```
 
 ---
 
 ## Hướng dẫn khởi động
 
-### 1. Khởi động Database
+### Cách 1: Triển khai bằng Docker Compose (Khuyên dùng)
+
+Toàn bộ hệ thống (Database, Backend, AI Service, Frontend) đã được đóng gói và cấu hình liên kết mạng thông qua `docker-compose.yml` ở thư mục gốc. Bạn chỉ cần chạy lệnh sau:
 
 ```bash
-cd backend/database
-docker compose up -d
-# pgAdmin: http://localhost:5050 (admin@example.com / admin123)
+# Tại thư mục dự án gốc (AttendanceSystem)
+docker compose up -d --build
 ```
 
-### 2. Khởi động AI Service
+**Các dịch vụ sẽ hoạt động tại các cổng:**
+- **Frontend Web UI:** `http://localhost:5173`
+- **Backend API:** `http://localhost:3001`
+- **AI Service Swagger:** `http://localhost:8001/docs`
+- **Database (PostgreSQL):** `localhost:5432`
+- **pgAdmin:** `http://localhost:5050` (admin@example.com / admin123)
+
+---
+
+### Cách 2: Khởi động thủ công (Môi trường Phát triển)
+
+#### 1. Khởi động Database
+
+```bash
+# Tại thư mục gốc hoặc backend/database
+docker compose up -d postgres pgadmin
+```
+
+#### 2. Khởi động AI Service
 
 ```bash
 cd backend/ai
@@ -105,18 +125,20 @@ uvicorn main:app --port 8001 --reload
 # Health check: http://localhost:8001/
 ```
 
-### 3. Khởi động Backend
+#### 3. Khởi động Backend
 
 ```bash
 cd backend
+npm install
 npm run dev
 # http://localhost:3001/api/health
 ```
 
-### 4. Khởi động Frontend
+#### 4. Khởi động Frontend
 
 ```bash
 cd frontend
+npm install
 npm run dev
 # http://localhost:5173
 ```
@@ -169,7 +191,10 @@ Người dùng upload ảnh
     → Backend INSERT/UPDATE students + face_profiles (embedding dạng vector)
 ```
 
-### Luồng điểm danh realtime (Trang 2)
+### Luồng điểm danh realtime (Trang 2) & Global Attendance
+
+Hệ thống hỗ trợ chế độ **Global Attendance** (Điểm danh toàn cục), cho phép linh động việc sinh viên không cần thiết phải bị ràng buộc bắt buộc vào một lớp học cố định để hệ thống có thể nhận diện.
+
 ```
 Giảng viên chọn phiên → Kích hoạt
     → Backend gọi open_attendance_session() → tạo sẵn tất cả record absent
@@ -234,8 +259,9 @@ LIMIT 1;
 - [ ] Trang báo cáo: xuất Excel từ `vw_attendance_student_summary`
 - [ ] Trang giảng viên: manual override trực tiếp trên bảng điểm danh
 - [ ] WebSocket thay polling cho log realtime (giảm latency)
-- [ ] Docker Compose cho toàn bộ hệ thống (db + ai + backend + frontend)
+- [x] Docker Compose cho toàn bộ hệ thống (db + ai + backend + frontend)
+- [x] Triển khai chế độ Global Attendance (Điểm danh không phụ thuộc cứng class enrollment) 
 
 ---
 
-*Cập nhật lần cuối: 2025-04-15*
+*Cập nhật lần cuối: 2026-04-16*

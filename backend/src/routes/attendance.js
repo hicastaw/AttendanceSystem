@@ -342,30 +342,35 @@ router.put('/sessions/:sessionId/records/:recordId/manual-override', requireRole
     });
   }
 
+  // Parse checkin_time safely to avoid PostgreSQL "inconsistent types" error
+  let parsedCheckinTime = null;
+  if (checkin_time) {
+    const d = new Date(checkin_time);
+    parsedCheckinTime = isNaN(d.getTime()) ? null : d.toISOString();
+  }
+
   try {
     const result = await pool.query(`
       UPDATE attendance_records ar
       SET
-        attendance_status = $1,
-        recognition_status = $2,
+        attendance_status = $1::varchar,
+        recognition_status = $2::varchar,
         is_manual_override = TRUE,
-        note = $3,
+        note = $3::text,
         checkin_time = CASE
-          WHEN $4::timestamp IS NOT NULL THEN $4::timestamp
+          WHEN $4::text IS NOT NULL THEN $4::text::timestamp
           WHEN $1 = 'absent' THEN NULL
           ELSE COALESCE(ar.checkin_time, CURRENT_TIMESTAMP)
         END,
         updated_at = CURRENT_TIMESTAMP
-      FROM attendance_sessions s
-      WHERE ar.record_id = $5
-        AND ar.session_id = $6
-        AND s.session_id = ar.session_id
+      WHERE ar.record_id = $5::bigint
+        AND ar.session_id = $6::bigint
       RETURNING ar.*
     `, [
       normalizedStatus,
       recognition_status || 'manual_marked',
       note?.trim() || null,
-      checkin_time || null,
+      parsedCheckinTime,
       req.params.recordId,
       req.params.sessionId,
     ]);
@@ -493,25 +498,32 @@ router.get('/sessions/:id/export', requireRoles('admin', 'lecturer'), ensureLect
       { key: 'note', label: 'Ghi chu' },
     ];
 
-    const rows = recordsResult.rows.map((row, index) => ({
-      stt: index + 1,
-      session_id: session.session_id,
-      session_title: session.session_title,
-      session_date: session.session_date,
-      course_code: session.course_code,
-      course_name: session.course_name,
-      class_code: row.class_code || session.class_code,
-      class_name: row.class_name || session.class_name,
-      lecturer_name: session.lecturer_name,
-      student_code: row.student_code,
-      student_name: row.student_name,
-      attendance_status: row.attendance_status,
-      recognition_status: row.recognition_status,
-      confidence_score: row.confidence_score,
-      sharpness_score: row.sharpness_score,
-      checkin_time: row.checkin_time ? new Date(row.checkin_time).toLocaleString('vi-VN') : '',
-      note: row.note || '',
-    }));
+    const rows = recordsResult.rows.map((row, index) => {
+      let formattedDate = session.session_date;
+      if (formattedDate) {
+        const d = new Date(formattedDate);
+        formattedDate = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+      }
+      return {
+        stt: index + 1,
+        session_id: session.session_id,
+        session_title: session.session_title,
+        session_date: formattedDate,
+        course_code: session.course_code,
+        course_name: session.course_name,
+        class_code: row.class_code || session.class_code,
+        class_name: row.class_name || session.class_name,
+        lecturer_name: session.lecturer_name,
+        student_code: row.student_code,
+        student_name: row.student_name,
+        attendance_status: row.attendance_status,
+        recognition_status: row.recognition_status,
+        confidence_score: row.confidence_score,
+        sharpness_score: row.sharpness_score,
+        checkin_time: row.checkin_time ? new Date(row.checkin_time).toLocaleString('vi-VN') : '',
+        note: row.note || '',
+      };
+    });
 
     const csv = toCsv(rows, headers);
     const safeName = String(session.session_title || `session_${sessionId}`)
@@ -641,6 +653,7 @@ router.post('/recognize', requireRoles('admin', 'lecturer'), uploadMemory.single
     const best = matchResult.rows[0];
     const similarityPercent = Math.round(best.similarity * 10000) / 100;
 
+    // giảm threshold để không bỏ sót mặt
     if (similarityPercent < 60) {
       return res.json({
         status: 'low_confidence',
