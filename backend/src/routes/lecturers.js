@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import pool from '../db.js';
+import { requireLecturerSelf, requireRoles } from '../middleware/auth.js';
 
 const router = Router();
 
 // GET /api/v1/lecturers — danh sách tất cả giảng viên
-router.get('/', async (req, res) => {
+router.get('/', requireRoles('admin', 'lecturer'), async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT lecturer_id, lecturer_code, full_name, email FROM lecturers ORDER BY lecturer_id`
@@ -17,7 +18,7 @@ router.get('/', async (req, res) => {
 });
 
 // GET /api/v1/lecturers/:code — thông tin giảng viên theo mã
-router.get('/:code', async (req, res) => {
+router.get('/:code', requireLecturerSelf('code'), async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT lecturer_id, lecturer_code, full_name, email FROM lecturers WHERE lecturer_code = $1`,
@@ -34,7 +35,7 @@ router.get('/:code', async (req, res) => {
 });
 
 // PUT /api/v1/lecturers/:code — cập nhật tên và email giảng viên
-router.put('/:code', async (req, res) => {
+router.put('/:code', requireLecturerSelf('code'), async (req, res) => {
   const { full_name, email } = req.body;
   if (!full_name || !full_name.trim()) {
     return res.status(400).json({ success: false, message: 'Họ tên không được để trống' });
@@ -55,7 +56,7 @@ router.put('/:code', async (req, res) => {
 });
 
 // GET /api/v1/lecturers/:code/sections — các học phần giáo viên đang dạy
-router.get('/:code/sections', async (req, res) => {
+router.get('/:code/sections', requireLecturerSelf('code'), async (req, res) => {
   try {
     const lecturerRes = await pool.query(
       `SELECT lecturer_id FROM lecturers WHERE lecturer_code = $1`,
@@ -96,7 +97,7 @@ router.get('/:code/sections', async (req, res) => {
 });
 
 // GET /api/v1/lecturers/:code/available-sections — học phần chưa có giáo viên dạy (có thể đăng ký)
-router.get('/:code/available-sections', async (req, res) => {
+router.get('/:code/available-sections', requireLecturerSelf('code'), async (req, res) => {
   try {
     const lecturerRes = await pool.query(
       `SELECT lecturer_id FROM lecturers WHERE lecturer_code = $1`,
@@ -142,7 +143,7 @@ router.get('/:code/available-sections', async (req, res) => {
 });
 
 // POST /api/v1/lecturers/:code/sections — đăng ký dạy học phần (cập nhật lecturer_id)
-router.post('/:code/sections', async (req, res) => {
+router.post('/:code/sections', requireLecturerSelf('code'), async (req, res) => {
   const { section_id } = req.body;
   if (!section_id) {
     return res.status(400).json({ success: false, message: 'Thiếu section_id' });
@@ -181,7 +182,7 @@ router.post('/:code/sections', async (req, res) => {
 
 // DELETE /api/v1/lecturers/:code/sections/:sectionId — rút khỏi học phần (chuyển về GV khác không được; chỉ reset sang GV mặc định hoặc từ chối nếu có session)
 // Thực tế: không cho xóa nếu đã có phiên điểm danh, nếu không thì mới cho phép chuyển
-router.delete('/:code/sections/:sectionId', async (req, res) => {
+router.delete('/:code/sections/:sectionId', requireLecturerSelf('code'), async (req, res) => {
   try {
     const lecturerRes = await pool.query(
       `SELECT lecturer_id FROM lecturers WHERE lecturer_code = $1`,

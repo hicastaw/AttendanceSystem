@@ -3,6 +3,7 @@ import axios from 'axios';
 import FormData from 'form-data';
 import pool from '../db.js';
 import { uploadMemory } from '../upload.js';
+import { ensureLecturerOwnsSection, ensureLecturerOwnsSession, getEffectiveStudentCode, requireRoles } from '../middleware/auth.js';
 
 const router = express.Router();
 const AI_URL = process.env.AI_SERVICE_URL || 'http://localhost:8001';
@@ -22,8 +23,22 @@ function toCsv(rows, headers) {
   return [headerLine, ...lines].join('\n');
 }
 
-router.get('/sections', async (req, res) => {
+function normalizeAttendanceStatus(value) {
+  const allowed = new Set(['early', 'on_time', 'late', 'absent']);
+  const normalized = String(value || '').trim().toLowerCase();
+  return allowed.has(normalized) ? normalized : null;
+}
+
+router.get('/sections', requireRoles('admin', 'lecturer'), async (req, res) => {
   try {
+    const params = [];
+    let where = '';
+
+    if (req.actor?.role === 'lecturer') {
+      params.push(req.actor.lecturerCode);
+      where = `WHERE l.lecturer_code = $${params.length}`;
+    }
+
     const result = await pool.query(`
       SELECT 
         cs.section_id,
@@ -32,21 +47,24 @@ router.get('/sections', async (req, res) => {
         cl.class_name,
         cl.class_code,
         l.full_name AS lecturer_name,
+        l.lecturer_code,
         cs.schedule_note
       FROM course_sections cs
       JOIN courses co ON cs.course_id = co.course_id
       JOIN classes cl ON cs.class_id = cl.class_id
       JOIN lecturers l ON cs.lecturer_id = l.lecturer_id
+      ${where}
       ORDER BY co.course_name, cl.class_name
-    `);
+    `, params);
     res.json({ status: 'success', data: result.rows });
   } catch (err) {
     res.status(500).json({ status: 'error', message: err.message });
   }
 });
 
-router.get('/open-sessions', async (req, res) => {
-  const studentCode = req.query.student_code?.trim().toUpperCase() || null;
+router.get('/open-sessions', requireRoles('admin', 'lecturer'), async (req, res) => {
+  // Admin and lecturer can filter by student_code optionally
+  const studentCode = req.query.student_code ? String(req.query.student_code).trim().toUpperCase() : null;
 
   try {
     const params = [];
@@ -106,7 +124,7 @@ router.get('/open-sessions', async (req, res) => {
   }
 });
 
-router.get('/sessions', async (req, res) => {
+router.get('/sessions', requireRoles('admin', 'lecturer'), async (req, res) => {
   try {
     const { section_id } = req.query;
     let query = `
@@ -122,16 +140,27 @@ router.get('/sessions', async (req, res) => {
         co.course_name,
         co.course_code,
         cl.class_name,
-        cl.class_code
+        cl.class_code,
+        l.lecturer_code,
+        l.full_name AS lecturer_name
       FROM attendance_sessions att
       JOIN course_sections cs ON att.section_id = cs.section_id
       JOIN courses co ON cs.course_id = co.course_id
       JOIN classes cl ON cs.class_id = cl.class_id
+      JOIN lecturers l ON l.lecturer_id = cs.lecturer_id
     `;
     const params = [];
+    const where = [];
     if (section_id) {
-      query += ' WHERE att.section_id = $1';
       params.push(section_id);
+      where.push(`att.section_id = $${params.length}`);
+    }
+    if (req.actor?.role === 'lecturer') {
+      params.push(req.actor.lecturerCode);
+      where.push(`l.lecturer_code = $${params.length}`);
+    }
+    if (where.length > 0) {
+      query += ` WHERE ${where.join(' AND ')}`;
     }
     query += ' ORDER BY att.session_date DESC, att.start_time DESC';
 
@@ -142,7 +171,7 @@ router.get('/sessions', async (req, res) => {
   }
 });
 
-router.post('/sessions', async (req, res) => {
+router.post('/sessions', requireRoles('admin', 'lecturer'), ensureLecturerOwnsSection, async (req, res) => {
   const { section_id, session_title, session_date, start_time, end_time, late_after_minutes } = req.body;
 
   if (!section_id || !session_title || !session_date || !start_time || !end_time) {
@@ -166,7 +195,7 @@ router.post('/sessions', async (req, res) => {
   }
 });
 
-router.put('/sessions/:id/open', async (req, res) => {
+router.put('/sessions/:id/open', requireRoles('admin', 'lecturer'), ensureLecturerOwnsSession, async (req, res) => {
   try {
     const result = await pool.query(
       'SELECT * FROM open_attendance_session($1)',
@@ -181,7 +210,7 @@ router.put('/sessions/:id/open', async (req, res) => {
   }
 });
 
-router.put('/sessions/:id/close', async (req, res) => {
+router.put('/sessions/:id/close', requireRoles('admin', 'lecturer'), ensureLecturerOwnsSession, async (req, res) => {
   try {
     const result = await pool.query(
       'SELECT * FROM close_attendance_session($1)',
@@ -196,34 +225,100 @@ router.put('/sessions/:id/close', async (req, res) => {
   }
 });
 
-router.post('/global-sessions', async (req, res) => {
-  const { start_time, end_time, late_after_minutes } = req.body;
-  if (!start_time || !end_time) {
-    return res.status(400).json({ status: 'error', message: 'Thiếu start_time hoặc end_time' });
-  }
+router.put('/sessions/:id/submit', requireRoles('admin', 'lecturer'), ensureLecturerOwnsSession, async (req, res) => {
   try {
-    const d = new Date();
-    const session_date = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
-    const session_title = `General Session ${d.toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`;
-    const start_timestamp = `${session_date} ${start_time}:00`;
-    const end_timestamp = `${session_date} ${end_time}:00`;
-
-    const result = await pool.query(`
-      INSERT INTO attendance_sessions 
-        (section_id, session_title, session_date, start_time, end_time, late_after_minutes, status)
-      VALUES (NULL, $1, $2, $3, $4, $5, 'draft')
-      RETURNING *
-    `, [session_title, session_date, start_timestamp, end_timestamp, late_after_minutes || 15]);
-
-    const session_id = result.rows[0].session_id;
-    const openResult = await pool.query('SELECT * FROM open_attendance_session($1)', [session_id]);
-    res.status(201).json({ status: 'success', data: openResult.rows[0] });
+    const result = await pool.query(
+      'SELECT * FROM submit_attendance_session($1)',
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ status: 'error', message: 'Không tìm thấy phiên điểm danh.' });
+    }
+    res.json({ status: 'success', message: 'Phiên điểm danh đã được chốt.', data: result.rows[0] });
   } catch (err) {
     res.status(500).json({ status: 'error', message: err.message });
   }
 });
 
-router.get('/sessions/:id/records', async (req, res) => {
+router.post('/global-sessions', requireRoles('admin'), async (req, res) => {
+  const {
+    start_time,
+    end_time,
+    late_after_minutes,
+    section_ids,
+    session_title,
+    session_date,
+    auto_open = true,
+  } = req.body;
+
+  if (!start_time || !end_time) {
+    return res.status(400).json({ status: 'error', message: 'Thiếu start_time hoặc end_time' });
+  }
+
+  const normalizedSectionIds = Array.isArray(section_ids)
+    ? [...new Set(section_ids.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0))]
+    : [];
+
+  const effectiveDate = session_date || new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
+  const effectiveTitle = String(session_title || `General Session ${start_time}-${end_time}`).trim();
+  const startTimestamp = `${effectiveDate} ${start_time}:00`;
+  const endTimestamp = `${effectiveDate} ${end_time}:00`;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const sectionsResult = normalizedSectionIds.length > 0
+      ? await client.query(
+          'SELECT section_id FROM course_sections WHERE section_id = ANY($1::bigint[]) ORDER BY section_id',
+          [normalizedSectionIds]
+        )
+      : await client.query('SELECT section_id FROM course_sections ORDER BY section_id');
+
+    if (sectionsResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ status: 'error', message: 'Không có học phần nào để tạo phiên.' });
+    }
+
+    const createdSessions = [];
+
+    for (const row of sectionsResult.rows) {
+      const insertResult = await client.query(`
+        INSERT INTO attendance_sessions
+          (section_id, session_title, session_date, start_time, end_time, late_after_minutes, status)
+        VALUES ($1, $2, $3, $4, $5, $6, 'draft')
+        ON CONFLICT (section_id, session_date, session_title)
+        DO UPDATE SET
+          start_time = EXCLUDED.start_time,
+          end_time = EXCLUDED.end_time,
+          late_after_minutes = EXCLUDED.late_after_minutes
+        RETURNING *
+      `, [row.section_id, effectiveTitle, effectiveDate, startTimestamp, endTimestamp, late_after_minutes || 15]);
+
+      const session = insertResult.rows[0];
+      if (auto_open && session?.session_id) {
+        const opened = await client.query('SELECT * FROM open_attendance_session($1)', [session.session_id]);
+        createdSessions.push(opened.rows[0]);
+      } else {
+        createdSessions.push(session);
+      }
+    }
+
+    await client.query('COMMIT');
+    res.status(201).json({
+      status: 'success',
+      message: `Đã tạo ${createdSessions.length} phiên điểm danh.`,
+      data: createdSessions,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ status: 'error', message: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+router.get('/sessions/:id/records', requireRoles('admin', 'lecturer'), ensureLecturerOwnsSession, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT * FROM vw_attendance_session_detail
@@ -236,7 +331,104 @@ router.get('/sessions/:id/records', async (req, res) => {
   }
 });
 
-router.get('/sessions/:id/export', async (req, res) => {
+router.put('/sessions/:sessionId/records/:recordId/manual-override', requireRoles('admin', 'lecturer'), ensureLecturerOwnsSession, async (req, res) => {
+  const { attendance_status, note, checkin_time, recognition_status } = req.body;
+  const normalizedStatus = normalizeAttendanceStatus(attendance_status);
+
+  if (!normalizedStatus) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'attendance_status phải là early, on_time, late hoặc absent.',
+    });
+  }
+
+  // Parse checkin_time safely to avoid PostgreSQL "inconsistent types" error
+  let parsedCheckinTime = null;
+  if (checkin_time) {
+    const d = new Date(checkin_time);
+    parsedCheckinTime = isNaN(d.getTime()) ? null : d.toISOString();
+  }
+
+  try {
+    const result = await pool.query(`
+      UPDATE attendance_records ar
+      SET
+        attendance_status = $1::varchar,
+        recognition_status = $2::varchar,
+        is_manual_override = TRUE,
+        note = $3::text,
+        checkin_time = CASE
+          WHEN $4::text IS NOT NULL THEN $4::text::timestamp
+          WHEN $1 = 'absent' THEN NULL
+          ELSE COALESCE(ar.checkin_time, CURRENT_TIMESTAMP)
+        END,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE ar.record_id = $5::bigint
+        AND ar.session_id = $6::bigint
+      RETURNING ar.*
+    `, [
+      normalizedStatus,
+      recognition_status || 'manual_marked',
+      note?.trim() || null,
+      parsedCheckinTime,
+      req.params.recordId,
+      req.params.sessionId,
+    ]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ status: 'error', message: 'Không tìm thấy bản ghi điểm danh.' });
+    }
+
+    res.json({
+      status: 'success',
+      message: 'Đã cập nhật điểm danh thủ công.',
+      data: result.rows[0],
+    });
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+router.delete('/sessions/:sessionId/records/:recordId/manual-override', requireRoles('admin', 'lecturer'), ensureLecturerOwnsSession, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      UPDATE attendance_records ar
+      SET
+        is_manual_override = FALSE,
+        note = NULL,
+        recognition_status = CASE
+          WHEN ar.checkin_time IS NULL THEN NULL
+          WHEN COALESCE(ar.confidence_score, 0) < 60 THEN 'low_confidence'
+          WHEN COALESCE(ar.sharpness_score, 0) <= 100 THEN 'blurry_rejected'
+          ELSE 'matched'
+        END,
+        attendance_status = CASE
+          WHEN ar.checkin_time IS NULL THEN 'absent'
+          WHEN COALESCE(ar.confidence_score, 0) < 60 THEN 'absent'
+          WHEN COALESCE(ar.sharpness_score, 0) <= 100 THEN 'absent'
+          ELSE compute_attendance_status(ar.session_id, ar.checkin_time)
+        END,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE ar.record_id = $1
+        AND ar.session_id = $2
+      RETURNING ar.*
+    `, [req.params.recordId, req.params.sessionId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ status: 'error', message: 'Không tìm thấy bản ghi điểm danh.' });
+    }
+
+    res.json({
+      status: 'success',
+      message: 'Đã hủy manual override.',
+      data: result.rows[0],
+    });
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+router.get('/sessions/:id/export', requireRoles('admin', 'lecturer'), ensureLecturerOwnsSession, async (req, res) => {
   try {
     const sessionId = req.params.id;
 
@@ -306,25 +498,32 @@ router.get('/sessions/:id/export', async (req, res) => {
       { key: 'note', label: 'Ghi chu' },
     ];
 
-    const rows = recordsResult.rows.map((row, index) => ({
-      stt: index + 1,
-      session_id: session.session_id,
-      session_title: session.session_title,
-      session_date: session.session_date,
-      course_code: session.course_code,
-      course_name: session.course_name,
-      class_code: row.class_code || session.class_code,
-      class_name: row.class_name || session.class_name,
-      lecturer_name: session.lecturer_name,
-      student_code: row.student_code,
-      student_name: row.student_name,
-      attendance_status: row.attendance_status,
-      recognition_status: row.recognition_status,
-      confidence_score: row.confidence_score,
-      sharpness_score: row.sharpness_score,
-      checkin_time: row.checkin_time ? new Date(row.checkin_time).toLocaleString('vi-VN') : '',
-      note: row.note || '',
-    }));
+    const rows = recordsResult.rows.map((row, index) => {
+      let formattedDate = session.session_date;
+      if (formattedDate) {
+        const d = new Date(formattedDate);
+        formattedDate = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+      }
+      return {
+        stt: index + 1,
+        session_id: session.session_id,
+        session_title: session.session_title,
+        session_date: formattedDate,
+        course_code: session.course_code,
+        course_name: session.course_name,
+        class_code: row.class_code || session.class_code,
+        class_name: row.class_name || session.class_name,
+        lecturer_name: session.lecturer_name,
+        student_code: row.student_code,
+        student_name: row.student_name,
+        attendance_status: row.attendance_status,
+        recognition_status: row.recognition_status,
+        confidence_score: row.confidence_score,
+        sharpness_score: row.sharpness_score,
+        checkin_time: row.checkin_time ? new Date(row.checkin_time).toLocaleString('vi-VN') : '',
+        note: row.note || '',
+      };
+    });
 
     const csv = toCsv(rows, headers);
     const safeName = String(session.session_title || `session_${sessionId}`)
@@ -339,8 +538,10 @@ router.get('/sessions/:id/export', async (req, res) => {
   }
 });
 
-router.post('/recognize', uploadMemory.single('frame'), async (req, res) => {
-  const { session_id, student_code } = req.body;
+router.post('/recognize', requireRoles('admin', 'lecturer'), uploadMemory.single('frame'), async (req, res) => {
+  const { session_id } = req.body;
+  // Admin/lecturer can optionally pass student_code to narrow down recognition
+  const student_code = req.body?.student_code ? String(req.body.student_code).trim().toUpperCase() : null;
 
   if (!session_id) {
     return res.status(400).json({ status: 'error', message: 'Thiếu session_id.' });
@@ -462,13 +663,16 @@ router.post('/recognize', uploadMemory.single('frame'), async (req, res) => {
       });
     }
 
+    // Generate checkin time in Vietnam timezone (YYYY-MM-DDTHH:mm:ss format)
+    const vnCheckinTime = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' }).replace(' ', 'T');
+
     const upsertResult = await pool.query(
       'SELECT * FROM upsert_attendance_record($1, $2, $3, $4, $5, $6, $7)',
       [
         session.session_id,
         best.student_id,
         null,
-        new Date().toISOString(),
+        vnCheckinTime,
         similarityPercent,
         aiData.sharpness_score || null,
         'matched',

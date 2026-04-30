@@ -1,519 +1,413 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../api/client.js';
+import { useAuth } from '../auth/AuthContext.jsx';
 import {
-  Camera,
-  CameraOff,
-  RefreshCw,
-  Search,
-  CheckCircle2,
-  XCircle,
-  Clock3,
-  AlertTriangle,
-  UserCheck,
-  BookOpen,
-  School,
-  ScanFace,
-  Play,
-  Square,
+  Camera, CameraOff, RefreshCw, CheckCircle2, XCircle, Clock3,
+  AlertTriangle, BookOpen, School, ScanFace, Square, Play, Pause,
+  Users, UserCheck, ChevronDown, Timer, X, Download, StopCircle,
 } from 'lucide-react';
 
-const STATUS_CONFIG = {
-  on_time: {
-    label: 'Đúng giờ',
-    badge: 'bg-emerald-100 text-emerald-700',
-    icon: <CheckCircle2 className="w-4 h-4" />,
-  },
-  early: {
-    label: 'Đến sớm',
-    badge: 'bg-sky-100 text-sky-700',
-    icon: <Clock3 className="w-4 h-4" />,
-  },
-  late: {
-    label: 'Đi muộn',
-    badge: 'bg-amber-100 text-amber-700',
-    icon: <AlertTriangle className="w-4 h-4" />,
-  },
-  absent: {
-    label: 'Vắng',
-    badge: 'bg-rose-100 text-rose-700',
-    icon: <XCircle className="w-4 h-4" />,
-  },
-  low_confidence: {
-    label: 'Độ tin cậy thấp',
-    badge: 'bg-orange-100 text-orange-700',
-    icon: <AlertTriangle className="w-4 h-4" />,
-  },
-  blurry_rejected: {
-    label: 'Ảnh mờ',
-    badge: 'bg-slate-100 text-slate-700',
-    icon: <AlertTriangle className="w-4 h-4" />,
-  },
-  no_face: {
-    label: 'Không thấy khuôn mặt',
-    badge: 'bg-slate-100 text-slate-700',
-    icon: <CameraOff className="w-4 h-4" />,
-  },
-  not_found: {
-    label: 'Không hợp lệ',
-    badge: 'bg-rose-100 text-rose-700',
-    icon: <XCircle className="w-4 h-4" />,
-  },
-  success: {
-    label: 'Điểm danh thành công',
-    badge: 'bg-emerald-100 text-emerald-700',
-    icon: <CheckCircle2 className="w-4 h-4" />,
-  },
+const STATUS_CFG = {
+  on_time:         { label: 'Đúng giờ',            cls: 'bg-emerald-100 text-emerald-700', icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
+  early:           { label: 'Đến sớm',             cls: 'bg-sky-100 text-sky-700',         icon: <Clock3 className="w-3.5 h-3.5" /> },
+  late:            { label: 'Đi muộn',             cls: 'bg-amber-100 text-amber-700',     icon: <AlertTriangle className="w-3.5 h-3.5" /> },
+  absent:          { label: 'Vắng',                cls: 'bg-rose-100 text-rose-700',       icon: <XCircle className="w-3.5 h-3.5" /> },
+  low_confidence:  { label: 'Độ tin cậy thấp',    cls: 'bg-orange-100 text-orange-700',   icon: <AlertTriangle className="w-3.5 h-3.5" /> },
+  blurry_rejected: { label: 'Ảnh mờ',             cls: 'bg-slate-100 text-slate-600',     icon: <AlertTriangle className="w-3.5 h-3.5" /> },
+  no_face:         { label: 'Không thấy mặt',     cls: 'bg-slate-100 text-slate-600',     icon: <CameraOff className="w-3.5 h-3.5" /> },
+  not_found:       { label: 'Không khớp',         cls: 'bg-rose-100 text-rose-700',       icon: <XCircle className="w-3.5 h-3.5" /> },
+  duplicate:       { label: 'Đã điểm danh',       cls: 'bg-purple-100 text-purple-700',   icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
+  success:         { label: 'Thành công',         cls: 'bg-emerald-100 text-emerald-700', icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
 };
 
-function formatDateTime(value) {
-  if (!value) return '--';
-  return new Date(value).toLocaleString('vi-VN');
-}
+function fmt(v) { return v ? new Date(v).toLocaleString('vi-VN') : '--'; }
+function fmtTime(v) { return v ? new Date(v).toLocaleTimeString('vi-VN') : '--'; }
 
-function SessionCard({ session, isSelected, onSelect }) {
-  const statusStyle = session.current_attendance_status
-    ? STATUS_CONFIG[session.current_attendance_status] || STATUS_CONFIG.success
-    : null;
-
+function Badge({ status, extra = '' }) {
+  const c = STATUS_CFG[status] || STATUS_CFG.not_found;
   return (
-    <button
-      onClick={() => onSelect(session.session_id)}
-      className={`w-full text-left rounded-2xl border p-4 transition-all ${
-        isSelected
-          ? 'border-primary-container bg-rose-50 shadow-sm'
-          : 'border-outline-variant/30 bg-white hover:border-primary-container/40 hover:shadow-sm'
-      } ${session.is_enrolled ? '' : 'opacity-60'}`}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-sm font-black text-on-surface">
-            {session.session_title}
-          </div>
-          <div className="text-xs text-secondary mt-1 flex flex-wrap gap-x-3 gap-y-1">
-            <span className="inline-flex items-center gap-1"><BookOpen className="w-3.5 h-3.5" />{session.course_code} - {session.course_name}</span>
-            <span className="inline-flex items-center gap-1"><School className="w-3.5 h-3.5" />{session.class_code} - {session.class_name}</span>
-          </div>
-          <div className="text-xs text-secondary mt-2">
-            {formatDateTime(session.start_time)} → {formatDateTime(session.end_time)}
-          </div>
-          <div className="text-xs text-secondary mt-1">GV: {session.lecturer_name}</div>
-        </div>
-        <div className="flex flex-col items-end gap-2">
-          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-700">
-            {session.status}
-          </span>
-          {session.is_enrolled ? (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold bg-sky-100 text-sky-700">
-              Thuộc phiên này
-            </span>
-          ) : (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600">
-              Không thuộc lớp
-            </span>
-          )}
-        </div>
-      </div>
-
-      {session.current_attendance_status && (
-        <div className="mt-3 pt-3 border-t border-outline-variant/20 flex items-center justify-between gap-3">
-          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${statusStyle?.badge || 'bg-slate-100 text-slate-700'}`}>
-            {statusStyle?.icon}
-            {statusStyle?.label || session.current_attendance_status}
-          </span>
-          <span className="text-xs text-secondary">{formatDateTime(session.current_checkin_time)}</span>
-        </div>
-      )}
-    </button>
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold ${c.cls} ${extra}`}>
+      {c.icon}{c.label}
+    </span>
   );
 }
 
-function LogItem({ entry }) {
-  const cfg = STATUS_CONFIG[entry.attendance_status || entry.status] || STATUS_CONFIG.not_found;
-
+function StatCard({ label, value, color = 'text-on-surface', sub }) {
   return (
-    <div className="py-3 border-b border-surface-container-low last:border-0">
-      <div className="flex items-start gap-3">
-        <span className="text-xs text-secondary font-mono mt-1 w-16 shrink-0">
-          {new Date(entry.timestamp).toLocaleTimeString('vi-VN')}
-        </span>
-        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${cfg.badge}`}>
-          {cfg.icon}
-          {cfg.label}
-        </span>
-        <div className="min-w-0 flex-1">
-          {entry.full_name ? (
-            <>
-              <div className="font-bold text-sm text-on-surface">{entry.full_name}</div>
-              <div className="text-xs text-secondary mt-1">
-                {entry.student_code} • {entry.session_title} • {entry.similarity ? `${entry.similarity}% khớp` : 'đã ghi nhận'}
-              </div>
-            </>
-          ) : (
-            <div className="text-sm text-secondary">{entry.message}</div>
-          )}
-        </div>
-      </div>
+    <div className="bg-white rounded-2xl border border-outline-variant/30 shadow-sm p-4">
+      <div className="text-xs text-secondary mb-1">{label}</div>
+      <div className={`text-2xl font-black ${color}`}>{value}</div>
+      {sub && <div className="text-xs text-secondary mt-1">{sub}</div>}
     </div>
   );
 }
 
 export default function AttendanceScan() {
+  const { isAdmin, isLecturer } = useAuth();
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
+  const intervalRef = useRef(null);
 
-  const [cameraOn, setCameraOn] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [studentCodeInput, setStudentCodeInput] = useState('');
-  const [studentCode, setStudentCode] = useState('');
-  const [openSessions, setOpenSessions] = useState([]);
-  const [selectedSessionId, setSelectedSessionId] = useState('');
+  const [sessions, setSessions] = useState([]);
+  const [selectedId, setSelectedId] = useState('');
+  const [records, setRecords] = useState([]);
   const [logs, setLogs] = useState([]);
+  const [cameraOn, setCameraOn] = useState(false);
+  const [autoScan, setAutoScan] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const [loadingSessions, setLoadingSessions] = useState(false);
+  const [scanInterval, setScanInterval] = useState(2);
+  const [closingSession, setClosingSession] = useState(false);
 
-  const selectedSession = useMemo(
-    () => openSessions.find((session) => String(session.session_id) === String(selectedSessionId)),
-    [openSessions, selectedSessionId]
-  );
-
-  const eligibleSessions = useMemo(() => {
-    if (!studentCode) return openSessions;
-    return openSessions.filter((session) => session.is_enrolled);
-  }, [openSessions, studentCode]);
-
-  const stats = useMemo(() => ({
-    success: logs.filter((item) => ['on_time', 'early', 'late'].includes(item.attendance_status)).length,
-    failed: logs.filter((item) => ['not_found', 'low_confidence', 'blurry_rejected'].includes(item.status || item.attendance_status)).length,
-  }), [logs]);
+  const selectedSession = sessions.find(s => String(s.session_id) === String(selectedId));
 
   const addLog = useCallback((entry) => {
-    setLogs((prev) => [{ ...entry, timestamp: new Date().toISOString() }, ...prev].slice(0, 50));
+    setLogs(prev => [{ ...entry, ts: new Date().toISOString() }, ...prev].slice(0, 100));
   }, []);
 
   const stopCamera = useCallback(() => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
+    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+    if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
     setCameraOn(false);
+    setAutoScan(false);
   }, []);
 
-  useEffect(() => stopCamera, [stopCamera]);
+  useEffect(() => () => stopCamera(), [stopCamera]);
+
+  const loadSessions = async () => {
+    setLoadingSessions(true);
+    try {
+      const res = await api.get('/attendance/open-sessions');
+      const list = res.data?.data || [];
+      setSessions(list);
+      if (list.length > 0 && !selectedId) setSelectedId(String(list[0].session_id));
+    } catch (e) {
+      addLog({ status: 'not_found', message: e.response?.data?.message || 'Không tải được phiên.' });
+    } finally { setLoadingSessions(false); }
+  };
+
+  const loadRecords = async (sid) => {
+    if (!sid) return;
+    try {
+      const res = await api.get(`/attendance/sessions/${sid}/records`);
+      setRecords(res.data?.data || []);
+    } catch { /* ignore */ }
+  };
+
+  useEffect(() => { loadSessions(); }, []);
+  useEffect(() => { loadRecords(selectedId); }, [selectedId]);
 
   const startCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          facingMode: 'user',
-        },
-      });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' } });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
+      if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play(); }
       setCameraOn(true);
-    } catch (error) {
-      addLog({ status: 'no_face', message: `Không thể mở camera: ${error.message}` });
+    } catch (e) {
+      addLog({ status: 'no_face', message: `Không mở được camera: ${e.message}` });
     }
   };
 
-  const loadOpenSessions = async (nextStudentCode = studentCode) => {
-    setLoadingSessions(true);
+  const capture = useCallback(async () => {
+    if (scanning || !selectedId || !videoRef.current || !canvasRef.current) return;
+    setScanning(true);
     try {
-      const query = nextStudentCode ? `?student_code=${encodeURIComponent(nextStudentCode)}` : '';
-      const res = await api.get(`/attendance/open-sessions${query}`);
-      const sessionList = res.data?.data || [];
-      setOpenSessions(sessionList);
-
-      const selectable = sessionList.filter((item) => !nextStudentCode || item.is_enrolled);
-      if (selectable.length === 0) {
-        setSelectedSessionId('');
-      } else if (!selectable.some((item) => String(item.session_id) === String(selectedSessionId))) {
-        setSelectedSessionId(String(selectable[0].session_id));
+      const v = videoRef.current, c = canvasRef.current;
+      c.width = v.videoWidth; c.height = v.videoHeight;
+      c.getContext('2d').drawImage(v, 0, 0);
+      const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.9));
+      if (!blob) return;
+      const fd = new FormData();
+      fd.append('frame', blob, 'frame.jpg');
+      fd.append('session_id', selectedId);
+      const res = await api.post('/attendance/recognize', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const d = res.data;
+      if (d.recognized) {
+        addLog({ status: 'success', attendance_status: d.data.attendance_status, full_name: d.data.full_name, student_code: d.data.student_code, similarity: d.data.similarity });
+        loadRecords(selectedId);
+      } else {
+        addLog({ status: d.status || 'not_found', message: d.message });
       }
-    } catch (error) {
-      addLog({ status: 'not_found', message: error.response?.data?.message || 'Không tải được danh sách phiên đang mở.' });
-    } finally {
-      setLoadingSessions(false);
+    } catch (e) {
+      const msg = e.response?.data?.message || e.message;
+      if (!msg?.includes('đã điểm danh')) addLog({ status: 'no_face', message: msg });
+    } finally { setScanning(false); }
+  }, [scanning, selectedId, addLog]);
+
+  const toggleAutoScan = useCallback(() => {
+    if (autoScan) {
+      clearInterval(intervalRef.current); intervalRef.current = null;
+      setAutoScan(false);
+    } else {
+      if (!cameraOn) return;
+      setAutoScan(true);
+      intervalRef.current = setInterval(() => capture(), scanInterval * 1000);
     }
-  };
+  }, [autoScan, cameraOn, capture, scanInterval]);
 
   useEffect(() => {
-    loadOpenSessions('');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleFindSessions = async () => {
-    const normalized = studentCodeInput.trim().toUpperCase();
-    setStudentCode(normalized);
-    await loadOpenSessions(normalized);
-  };
-
-  const captureAndSubmit = async () => {
-    if (!selectedSessionId) {
-      addLog({ status: 'not_found', message: 'Hãy chọn một phiên điểm danh đang mở.' });
-      return;
+    if (autoScan && intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = setInterval(() => capture(), scanInterval * 1000);
     }
-    if (studentCode && selectedSession && !selectedSession.is_enrolled) {
-      addLog({ status: 'not_found', message: 'Mã sinh viên này không thuộc lớp của phiên đã chọn.' });
-      return;
-    }
-    if (!videoRef.current || !canvasRef.current) {
-      addLog({ status: 'no_face', message: 'Camera chưa sẵn sàng.' });
-      return;
-    }
+  }, [scanInterval, autoScan, capture]);
 
-    setSubmitting(true);
+  const handleCloseSession = async () => {
+    if (!selectedId) return;
+    setClosingSession(true);
     try {
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const context = canvas.getContext('2d');
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
-      if (!blob) {
-        throw new Error('Không tạo được ảnh từ camera.');
-      }
-
-      const formData = new FormData();
-      formData.append('frame', blob, 'student-checkin.jpg');
-      formData.append('session_id', selectedSessionId);
-      if (studentCode) formData.append('student_code', studentCode);
-
-      const res = await api.post('/attendance/recognize', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      const payload = res.data;
-
-      if (!payload.recognized) {
-        addLog({ status: payload.status || 'not_found', message: payload.message || 'Điểm danh thất bại.' });
-        return;
-      }
-
-      addLog({
-        ...payload.data,
-        status: 'success',
-        attendance_status: payload.data.attendance_status,
-      });
-      await loadOpenSessions(studentCode);
-    } catch (error) {
-      addLog({ status: 'not_found', message: error.response?.data?.message || error.message || 'Không thể gửi điểm danh.' });
-    } finally {
-      setSubmitting(false);
-    }
+      await api.put(`/attendance/sessions/${selectedId}/close`);
+      addLog({ status: 'success', message: `Đã đóng phiên #${selectedId}` });
+      stopCamera();
+      await loadSessions();
+      setSelectedId('');
+      setRecords([]);
+    } catch (e) {
+      addLog({ status: 'not_found', message: e.response?.data?.message || 'Không đóng được phiên.' });
+    } finally { setClosingSession(false); }
   };
+
+  const attended = records.filter(r => r.attendance_status && r.attendance_status !== 'absent');
+  const onTime   = records.filter(r => r.attendance_status === 'on_time' || r.attendance_status === 'early');
+  const late     = records.filter(r => r.attendance_status === 'late');
+  const absent   = records.filter(r => !r.attendance_status || r.attendance_status === 'absent');
 
   return (
-    <main className="flex-grow bg-surface py-8 px-4 md:px-8">
-      <div className="max-w-7xl mx-auto space-y-6">
-        <div>
-          <h1 className="text-4xl font-black text-on-surface mb-2">Điểm danh cho sinh viên</h1>
-          <p className="text-secondary max-w-3xl">
-            Chọn đúng phiên mà giáo viên đã mở cho lớp của bạn, bật camera và thực hiện check-in một lần để hệ thống ghi nhận trạng thái điểm danh.
-          </p>
+    <main className="flex-grow bg-surface py-6 px-4 md:px-8">
+      <div className="max-w-7xl mx-auto space-y-5">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div>
+            <h1 className="text-3xl font-black text-on-surface">Điểm danh bằng khuôn mặt</h1>
+            <p className="text-secondary text-sm mt-1">Chọn phiên → Bật camera → Bật auto-scan để nhận diện liên tục</p>
+          </div>
+          <button onClick={loadSessions} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-surface-container-low font-semibold text-sm hover:bg-surface-container">
+            <RefreshCw className="w-4 h-4" />Làm mới phiên
+          </button>
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
-          <div className="xl:col-span-2 space-y-4">
+        {/* Session selector */}
+        <section className="bg-white rounded-2xl border border-outline-variant/30 shadow-sm p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <BookOpen className="w-5 h-5 text-primary-container" />
+            <h2 className="text-base font-black text-on-surface">Chọn phiên điểm danh</h2>
+            <span className="ml-auto text-xs font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700">{sessions.length} phiên đang mở</span>
+          </div>
+          {loadingSessions ? (
+            <div className="text-sm text-secondary">Đang tải...</div>
+          ) : sessions.length === 0 ? (
+            <div className="text-sm text-secondary py-4 text-center">Hiện chưa có phiên nào đang mở.</div>
+          ) : (
+            <div className="relative">
+              <select
+                value={selectedId}
+                onChange={e => { setSelectedId(e.target.value); stopCamera(); setLogs([]); }}
+                className="w-full rounded-xl border border-outline-variant/40 px-4 py-3 pr-10 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary-container/25 appearance-none"
+              >
+                <option value="">-- Chọn phiên --</option>
+                {sessions.map(s => (
+                  <option key={s.session_id} value={s.session_id}>
+                    #{s.session_id} | {s.session_title} — {s.course_code} {s.class_code} ({fmt(s.start_time)} → {fmt(s.end_time)})
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-secondary pointer-events-none" />
+            </div>
+          )}
+          {selectedSession && (
+            <div className="mt-3 flex flex-wrap gap-2 text-xs text-secondary">
+              <span className="inline-flex items-center gap-1"><School className="w-3.5 h-3.5" />{selectedSession.class_name}</span>
+              <span className="inline-flex items-center gap-1"><BookOpen className="w-3.5 h-3.5" />{selectedSession.course_name}</span>
+              <span className="inline-flex items-center gap-1"><Timer className="w-3.5 h-3.5" />Muộn sau {selectedSession.late_after_minutes} phút</span>
+              <span className="ml-auto font-bold text-emerald-600">● Đang mở</span>
+            </div>
+          )}
+        </section>
+
+        {/* Stats */}
+        {selectedId && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <StatCard label="Tổng sinh viên" value={records.length} sub="trong phiên" />
+            <StatCard label="Đã điểm danh" value={attended.length} color="text-emerald-700" sub={`${records.length ? Math.round(attended.length/records.length*100) : 0}%`} />
+            <StatCard label="Đúng giờ / Sớm" value={onTime.length} color="text-sky-700" sub={`Muộn: ${late.length}`} />
+            <StatCard label="Chưa điểm danh" value={absent.length} color="text-rose-700" sub="vắng mặt" />
+          </div>
+        )}
+
+        {/* Main grid */}
+        <div className="grid grid-cols-1 xl:grid-cols-5 gap-5">
+          {/* Camera panel */}
+          <div className="xl:col-span-3 space-y-4">
             <section className="bg-white rounded-2xl border border-outline-variant/30 shadow-sm p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <UserCheck className="w-5 h-5 text-primary-container" />
-                <h2 className="text-lg font-black text-on-surface">Tìm phiên của bạn</h2>
+              <div className="flex flex-wrap items-center gap-2 mb-4">
+                <ScanFace className="w-5 h-5 text-primary-container" />
+                <h2 className="text-base font-black text-on-surface flex-1">Camera nhận diện</h2>
+                {/* Interval selector */}
+                <div className="flex items-center gap-1.5">
+                  <Timer className="w-4 h-4 text-secondary" />
+                  <span className="text-xs text-secondary font-semibold">Tần suất:</span>
+                  {[1, 2, 3, 5].map(s => (
+                    <button key={s} onClick={() => setScanInterval(s)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${scanInterval === s ? 'bg-primary-container text-white' : 'bg-surface-container-low text-secondary hover:bg-surface-container'}`}>
+                      {s}s
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              <div className="space-y-3">
-                <label className="block">
-                  <span className="text-xs font-bold text-secondary uppercase tracking-wide">Mã sinh viên</span>
-                  <div className="mt-2 flex gap-2">
-                    <div className="relative flex-1">
-                      <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-secondary" />
-                      <input
-                        value={studentCodeInput}
-                        onChange={(e) => setStudentCodeInput(e.target.value.toUpperCase())}
-                        placeholder="VD: B22DCCN001"
-                        className="w-full rounded-xl border border-outline-variant/40 pl-10 pr-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-container/25"
-                      />
-                    </div>
-                    <button
-                      onClick={handleFindSessions}
-                      className="px-4 py-3 rounded-xl bg-primary-container text-white font-bold hover:opacity-90"
-                    >
-                      Lọc
-                    </button>
-                  </div>
-                </label>
+              {/* Camera buttons */}
+              <div className="flex flex-wrap gap-2 mb-4">
+                {!cameraOn ? (
+                  <button onClick={startCamera} disabled={!selectedId}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary-container text-white font-bold hover:opacity-90 disabled:opacity-50 text-sm">
+                    <Camera className="w-4 h-4" />Bật camera
+                  </button>
+                ) : (
+                  <button onClick={stopCamera}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-700 text-white font-bold hover:bg-slate-800 text-sm">
+                    <Square className="w-4 h-4" />Tắt camera
+                  </button>
+                )}
+                <button onClick={toggleAutoScan} disabled={!cameraOn || !selectedId}
+                  className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition-all disabled:opacity-50 ${autoScan ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}>
+                  {autoScan ? <><Pause className="w-4 h-4" />Dừng auto-scan</> : <><Play className="w-4 h-4" />Bắt đầu auto-scan</>}
+                </button>
+                <button onClick={() => capture()} disabled={!cameraOn || !selectedId || scanning}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sky-600 text-white font-bold hover:bg-sky-700 disabled:opacity-50 text-sm">
+                  {scanning ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ScanFace className="w-4 h-4" />}Quét thủ công
+                </button>
+                {selectedSession && (isAdmin || isLecturer) && (
+                  <button onClick={handleCloseSession} disabled={closingSession}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-rose-600 text-white font-bold hover:bg-rose-700 disabled:opacity-50 text-sm ml-auto">
+                    <StopCircle className="w-4 h-4" />{closingSession ? 'Đang đóng...' : 'Đóng phiên'}
+                  </button>
+                )}
+              </div>
 
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => loadOpenSessions(studentCode)}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-surface-container-low font-semibold hover:bg-surface-container"
-                  >
-                    <RefreshCw className="w-4 h-4" /> Làm mới phiên mở
-                  </button>
-                  <button
-                    onClick={() => {
-                      setStudentCode('');
-                      setStudentCodeInput('');
-                      loadOpenSessions('');
-                    }}
-                    className="px-4 py-2.5 rounded-xl border border-outline-variant/30 font-semibold"
-                  >
-                    Bỏ lọc
-                  </button>
-                </div>
+              {/* Video */}
+              <div className="bg-black rounded-2xl overflow-hidden aspect-video relative shadow-inner">
+                <video ref={videoRef} muted playsInline className="w-full h-full object-cover" style={{ display: cameraOn ? 'block' : 'none' }} />
+                <canvas ref={canvasRef} className="hidden" />
+                {!cameraOn && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white/60">
+                    <CameraOff className="w-14 h-14" />
+                    <div className="text-center">
+                      <div className="font-bold">Camera chưa bật</div>
+                      <div className="text-sm text-white/40 mt-1">{selectedId ? 'Bật camera để bắt đầu điểm danh' : 'Hãy chọn phiên điểm danh trước'}</div>
+                    </div>
+                  </div>
+                )}
+                {cameraOn && (
+                  <div className="absolute inset-0 pointer-events-none">
+                    <div className="absolute inset-[10%] border-2 border-primary-container/50 rounded-3xl" />
+                    <div className="absolute left-[10%] right-[10%] top-1/2 h-px bg-gradient-to-r from-transparent via-primary-container/60 to-transparent" />
+                    <div className="absolute top-3 left-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/50 text-white text-xs font-bold">
+                      <span className={`w-2 h-2 rounded-full ${autoScan ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+                      {autoScan ? `Auto-scan mỗi ${scanInterval}s` : 'Camera sẵn sàng'}
+                    </div>
+                    {scanning && (
+                      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary-container/90 text-white text-xs font-bold">
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />Đang nhận diện...
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </section>
 
-            <section className="bg-white rounded-2xl border border-outline-variant/30 shadow-sm p-5">
-              <div className="flex items-center justify-between gap-3 mb-4">
-                <div className="flex items-center gap-2">
-                  <BookOpen className="w-5 h-5 text-primary-container" />
-                  <h2 className="text-lg font-black text-on-surface">Phiên đang mở</h2>
-                </div>
-                <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700">
-                  {eligibleSessions.length} phiên
-                </span>
+            {/* Log */}
+            <section className="bg-white rounded-2xl border border-outline-variant/30 shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-3.5 border-b border-surface-container-low">
+                <div className="font-black text-on-surface text-sm">Nhật ký nhận diện</div>
+                <button onClick={() => setLogs([])} className="text-xs text-secondary hover:text-rose-600 flex items-center gap-1">
+                  <X className="w-3.5 h-3.5" />Xóa log
+                </button>
               </div>
-
-              <div className="space-y-3 max-h-[520px] overflow-auto">
-                {loadingSessions ? (
-                  <div className="text-sm text-secondary">Đang tải danh sách phiên...</div>
-                ) : eligibleSessions.length === 0 ? (
-                  <div className="text-sm text-secondary">
-                    {studentCode
-                      ? 'Không có phiên mở nào phù hợp với mã sinh viên này.'
-                      : 'Hiện chưa có phiên điểm danh nào đang mở.'}
+              <div className="max-h-[260px] overflow-auto px-5 py-2">
+                {logs.length === 0 ? (
+                  <div className="py-8 text-center text-sm text-secondary">Chưa có kết quả nào. Bật camera và auto-scan để bắt đầu.</div>
+                ) : logs.map((e, i) => (
+                  <div key={i} className="py-2.5 border-b border-surface-container-low last:border-0 flex items-start gap-3">
+                    <span className="text-xs text-secondary font-mono mt-0.5 w-14 shrink-0">{fmtTime(e.ts)}</span>
+                    <Badge status={e.attendance_status || e.status} />
+                    <div className="min-w-0 flex-1">
+                      {e.full_name ? (
+                        <>
+                          <div className="font-bold text-sm text-on-surface truncate">{e.full_name}</div>
+                          <div className="text-xs text-secondary">{e.student_code}{e.similarity ? ` • ${e.similarity}% khớp` : ''}</div>
+                        </>
+                      ) : (
+                        <div className="text-sm text-secondary">{e.message}</div>
+                      )}
+                    </div>
                   </div>
-                ) : (
-                  eligibleSessions.map((session) => (
-                    <SessionCard
-                      key={session.session_id}
-                      session={session}
-                      isSelected={String(session.session_id) === String(selectedSessionId)}
-                      onSelect={setSelectedSessionId}
-                    />
-                  ))
-                )}
+                ))}
               </div>
             </section>
           </div>
 
-          <div className="xl:col-span-3 space-y-4">
-            <section className="bg-white rounded-2xl border border-outline-variant/30 shadow-sm p-5">
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <ScanFace className="w-5 h-5 text-primary-container" />
-                    <h2 className="text-lg font-black text-on-surface">Check-in bằng khuôn mặt</h2>
-                  </div>
-                  <p className="text-sm text-secondary">
-                    {selectedSession
-                      ? `${selectedSession.session_title} • ${selectedSession.course_name} • ${selectedSession.class_name}`
-                      : 'Hãy chọn một phiên đang mở ở bên trái.'}
-                  </p>
+          {/* Student list panel */}
+          <div className="xl:col-span-2">
+            <section className="bg-white rounded-2xl border border-outline-variant/30 shadow-sm overflow-hidden h-full">
+              <div className="flex items-center justify-between px-5 py-3.5 border-b border-surface-container-low">
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-primary-container" />
+                  <span className="font-black text-on-surface text-sm">Danh sách lớp</span>
                 </div>
-                <div className="flex gap-2">
-                  {!cameraOn ? (
-                    <button
-                      onClick={startCamera}
-                      className="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-primary-container text-white font-bold hover:opacity-90"
-                    >
-                      <Camera className="w-4 h-4" /> Bật camera
-                    </button>
-                  ) : (
-                    <button
-                      onClick={stopCamera}
-                      className="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-slate-700 text-white font-bold hover:bg-slate-800"
-                    >
-                      <Square className="w-4 h-4" /> Tắt camera
-                    </button>
-                  )}
-                  <button
-                    onClick={captureAndSubmit}
-                    disabled={!cameraOn || !selectedSessionId || submitting}
-                    className="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 disabled:opacity-50"
-                  >
-                    {submitting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-                    Check-in ngay
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700">
+                    <UserCheck className="w-3 h-3 inline mr-0.5" />{attended.length}/{records.length}
+                  </span>
+                  <button onClick={() => loadRecords(selectedId)} className="text-xs text-secondary hover:text-primary-container">
+                    <RefreshCw className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
-
-              <div className="bg-black rounded-2xl overflow-hidden aspect-video relative shadow-lg">
-                <video
-                  ref={videoRef}
-                  muted
-                  playsInline
-                  className="w-full h-full object-cover"
-                  style={{ display: cameraOn ? 'block' : 'none' }}
-                />
-                <canvas ref={canvasRef} className="hidden" />
-
-                {!cameraOn && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-white/70">
-                    <CameraOff className="w-16 h-16" />
-                    <div className="text-center">
-                      <div className="font-bold">Camera chưa bật</div>
-                      <div className="text-sm text-white/50 mt-1">Bật camera để chụp ảnh check-in</div>
-                    </div>
-                  </div>
-                )}
-
-                {cameraOn && (
-                  <div className="absolute inset-0 pointer-events-none">
-                    <div className="absolute inset-[12%] border-2 border-primary-container/50 rounded-2xl border-pulse" />
-                    <div className="absolute left-[12%] right-[12%] top-1/2 h-0.5 bg-gradient-to-r from-transparent via-primary-container to-transparent" />
-                    <div className="absolute top-4 left-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/45 text-white text-xs font-bold">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                      Sẵn sàng nhận diện
-                    </div>
-                  </div>
-                )}
-              </div>
-            </section>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <section className="bg-white rounded-2xl border border-outline-variant/30 shadow-sm p-5">
-                <div className="text-sm text-secondary">Phiên đã chọn</div>
-                <div className="text-xl font-black mt-2 text-on-surface">{selectedSession ? `#${selectedSession.session_id}` : '--'}</div>
-                <div className="text-sm text-secondary mt-2">{selectedSession?.class_name || 'Chưa chọn phiên'}</div>
-              </section>
-              <section className="bg-white rounded-2xl border border-outline-variant/30 shadow-sm p-5">
-                <div className="text-sm text-secondary">Check-in thành công</div>
-                <div className="text-xl font-black mt-2 text-emerald-700">{stats.success}</div>
-                <div className="text-sm text-secondary mt-2">Trong log hiện tại</div>
-              </section>
-              <section className="bg-white rounded-2xl border border-outline-variant/30 shadow-sm p-5">
-                <div className="text-sm text-secondary">Lỗi / không hợp lệ</div>
-                <div className="text-xl font-black mt-2 text-rose-700">{stats.failed}</div>
-                <div className="text-sm text-secondary mt-2">Để kiểm tra lại ánh sáng, vị trí camera</div>
-              </section>
-            </div>
-
-            <section className="bg-white rounded-2xl border border-outline-variant/30 shadow-sm overflow-hidden">
-              <div className="flex items-center justify-between px-5 py-4 border-b border-surface-container-low">
-                <div className="font-black text-on-surface">Nhật ký điểm danh</div>
-                <button
-                  onClick={() => setLogs([])}
-                  className="text-sm text-secondary hover:text-primary-container"
-                >
-                  Xóa log
-                </button>
-              </div>
-              <div className="px-5 max-h-[340px] overflow-auto">
-                {logs.length === 0 ? (
+              <div className="overflow-auto max-h-[700px]">
+                {records.length === 0 ? (
                   <div className="py-12 text-center text-sm text-secondary">
-                    Chưa có thao tác nào. Hãy chọn phiên, bật camera và bấm check-in.
+                    {selectedId ? 'Chưa có dữ liệu sinh viên.' : 'Hãy chọn phiên để xem danh sách.'}
                   </div>
                 ) : (
-                  logs.map((entry, index) => <LogItem key={`${entry.timestamp}-${index}`} entry={entry} />)
+                  <table className="w-full text-sm">
+                    <thead className="bg-surface-container-low/60 text-xs text-secondary font-bold uppercase tracking-wide sticky top-0">
+                      <tr>
+                        <th className="text-left px-4 py-2">Sinh viên</th>
+                        <th className="text-center px-3 py-2">Trạng thái</th>
+                        <th className="text-right px-4 py-2">Check-in</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {records.map((r, i) => {
+                        const isPresent = r.attendance_status && r.attendance_status !== 'absent';
+                        return (
+                          <tr key={i} className={`border-b border-surface-container-low/60 hover:bg-surface-container-low/30 transition-colors ${isPresent ? '' : 'opacity-70'}`}>
+                            <td className="px-4 py-2.5">
+                              <div className="font-semibold text-on-surface truncate max-w-[130px]">{r.student_name}</div>
+                              <div className="text-xs text-secondary">{r.student_code}</div>
+                            </td>
+                            <td className="px-3 py-2.5 text-center">
+                              <Badge status={r.attendance_status || 'absent'} />
+                            </td>
+                            <td className="px-4 py-2.5 text-right text-xs text-secondary">
+                              {r.checkin_time ? fmtTime(r.checkin_time) : '--'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 )}
               </div>
+              {records.length > 0 && selectedId && (
+                <div className="px-5 py-3 border-t border-surface-container-low">
+                  <a href={`/api/v1/attendance/sessions/${selectedId}/export`}
+                    className="inline-flex items-center gap-2 text-xs font-bold text-primary-container hover:underline">
+                    <Download className="w-3.5 h-3.5" />Xuất CSV
+                  </a>
+                </div>
+              )}
             </section>
           </div>
         </div>

@@ -34,3 +34,15 @@ Sau khi chay, vao trang giao vien de xem danh sach hoc phan, phien diem danh, si
 
 
 Bo du lieu hien tai da duoc nang cap len 160 sinh vien, 16 hoc phan va 64 phien diem danh de demo quy mo lon hon.
+
+
+=== DANG NHAP THAT ===
+Frontend nay da bo sung trang dang nhap that: http://localhost:5173/login
+
+Tai khoan demo mac dinh:
+- admin / Admin@123
+- gv001 / GV001@123
+- sv0001 / SV0001@123
+
+Backend se tu dong bootstrap bang auth_users khi khoi dong.
+Neu dung DB cu, chi can restart backend la se tao cac tai khoan con thieu.
