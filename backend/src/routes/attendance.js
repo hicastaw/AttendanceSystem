@@ -493,25 +493,32 @@ router.get('/sessions/:id/export', requireRoles('admin', 'lecturer'), ensureLect
       { key: 'note', label: 'Ghi chu' },
     ];
 
-    const rows = recordsResult.rows.map((row, index) => ({
-      stt: index + 1,
-      session_id: session.session_id,
-      session_title: session.session_title,
-      session_date: session.session_date,
-      course_code: session.course_code,
-      course_name: session.course_name,
-      class_code: row.class_code || session.class_code,
-      class_name: row.class_name || session.class_name,
-      lecturer_name: session.lecturer_name,
-      student_code: row.student_code,
-      student_name: row.student_name,
-      attendance_status: row.attendance_status,
-      recognition_status: row.recognition_status,
-      confidence_score: row.confidence_score,
-      sharpness_score: row.sharpness_score,
-      checkin_time: row.checkin_time ? new Date(row.checkin_time).toLocaleString('vi-VN') : '',
-      note: row.note || '',
-    }));
+    const rows = recordsResult.rows.map((row, index) => {
+      let formattedDate = session.session_date;
+      if (formattedDate) {
+        const d = new Date(formattedDate);
+        formattedDate = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+      }
+      return {
+        stt: index + 1,
+        session_id: session.session_id,
+        session_title: session.session_title,
+        session_date: formattedDate,
+        course_code: session.course_code,
+        course_name: session.course_name,
+        class_code: row.class_code || session.class_code,
+        class_name: row.class_name || session.class_name,
+        lecturer_name: session.lecturer_name,
+        student_code: row.student_code,
+        student_name: row.student_name,
+        attendance_status: row.attendance_status,
+        recognition_status: row.recognition_status,
+        confidence_score: row.confidence_score,
+        sharpness_score: row.sharpness_score,
+        checkin_time: row.checkin_time ? new Date(row.checkin_time).toLocaleString('vi-VN') : '',
+        note: row.note || '',
+      };
+    });
 
     const csv = toCsv(rows, headers);
     const safeName = String(session.session_title || `session_${sessionId}`)

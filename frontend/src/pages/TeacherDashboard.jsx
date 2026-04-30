@@ -189,7 +189,7 @@ export default function TeacherDashboard() {
     if (!sessionId) { setRecords([]); return; }
     setRecordsLoading(true);
     try {
-      const res = await api.get(`/attendance/sessions/${sessionId}/records`);
+      const res = await api.get(`/attendance/sessions/${sessionId}/records?_t=${Date.now()}`);
       setRecords(res.data?.data || []);
     } catch {
       notify('Không tải được kết quả điểm danh', 'error');
@@ -339,12 +339,20 @@ export default function TeacherDashboard() {
       return;
     }
     try {
+      let endDateTime = `${form.session_date} ${form.end_time}:00`;
+      if (form.end_time <= form.start_time) {
+        const d = new Date(form.session_date);
+        d.setDate(d.getDate() + 1);
+        const nextDayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        endDateTime = `${nextDayStr} ${form.end_time}:00`;
+      }
+
       const payload = {
         section_id: Number(form.section_id),
         session_title: form.session_title,
         session_date: form.session_date,
         start_time: `${form.session_date} ${form.start_time}:00`,
-        end_time: `${form.session_date} ${form.end_time}:00`,
+        end_time: endDateTime,
         late_after_minutes: Number(form.late_after_minutes),
       };
       await api.post('/attendance/sessions', payload);
@@ -441,7 +449,21 @@ export default function TeacherDashboard() {
       );
       notify('Đã cập nhật điểm danh thủ công');
       setShowOverrideModal(false);
-      await fetchRecords(selectedSessionId);
+      // Cập nhật state ngay lập tức để UI phản ánh trạng thái mới
+      setRecords((prev) =>
+        prev.map((r) =>
+          r.record_id === overrideForm.record_id
+            ? {
+                ...r,
+                attendance_status: overrideForm.attendance_status,
+                note: overrideForm.note || r.note,
+                is_manual_override: true,
+              }
+            : r
+        )
+      );
+      // Fetch lại từ server sau khoảng trễ ngắn để đảm bảo đồng bộ DB
+      setTimeout(() => fetchRecords(selectedSessionId), 500);
     } catch (err) {
       notify(err.response?.data?.message || 'Không thể cập nhật điểm danh thủ công', 'error');
     } finally {
@@ -453,9 +475,27 @@ export default function TeacherDashboard() {
     if (!selectedSessionId || !record?.record_id) return;
     setOverrideSaving(true);
     try {
-      await api.delete(`/attendance/sessions/${selectedSessionId}/records/${record.record_id}/manual-override`);
+      const res = await api.delete(`/attendance/sessions/${selectedSessionId}/records/${record.record_id}/manual-override`);
       notify('Đã bỏ manual override');
-      await fetchRecords(selectedSessionId);
+      // Cập nhật state ngay lập tức với dữ liệu trả về từ server
+      const updated = res.data?.data;
+      if (updated) {
+        setRecords((prev) =>
+          prev.map((r) =>
+            r.record_id === record.record_id
+              ? {
+                  ...r,
+                  attendance_status: updated.attendance_status,
+                  recognition_status: updated.recognition_status,
+                  note: updated.note || null,
+                  is_manual_override: false,
+                }
+              : r
+          )
+        );
+      }
+      // Fetch lại để đồng bộ hoàn toàn
+      setTimeout(() => fetchRecords(selectedSessionId), 500);
     } catch (err) {
       notify(err.response?.data?.message || 'Không thể bỏ manual override', 'error');
     } finally {
@@ -882,7 +922,6 @@ export default function TeacherDashboard() {
                   <div>
                     <label className="block text-xs font-bold text-secondary uppercase mb-2">Học phần</label>
                     <select
-                    disabled={!isAdmin}
                       value={form.section_id}
                       onChange={(e) => setForm({ ...form, section_id: e.target.value })}
                       className="w-full border border-outline-variant/50 rounded-lg px-4 py-3 text-sm"
@@ -1222,7 +1261,6 @@ export default function TeacherDashboard() {
                 <div>
                   <label className="block text-xs font-bold text-secondary uppercase mb-2">Trạng thái điểm danh</label>
                   <select
-                    disabled={!isAdmin}
                     value={overrideForm.attendance_status}
                     onChange={(e) => setOverrideForm((prev) => ({ ...prev, attendance_status: e.target.value }))}
                     className="w-full border border-outline-variant/50 rounded-lg px-4 py-3 text-sm"
