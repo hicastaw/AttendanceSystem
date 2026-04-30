@@ -342,30 +342,35 @@ router.put('/sessions/:sessionId/records/:recordId/manual-override', requireRole
     });
   }
 
+  // Parse checkin_time safely to avoid PostgreSQL "inconsistent types" error
+  let parsedCheckinTime = null;
+  if (checkin_time) {
+    const d = new Date(checkin_time);
+    parsedCheckinTime = isNaN(d.getTime()) ? null : d.toISOString();
+  }
+
   try {
     const result = await pool.query(`
       UPDATE attendance_records ar
       SET
-        attendance_status = $1,
-        recognition_status = $2,
+        attendance_status = $1::varchar,
+        recognition_status = $2::varchar,
         is_manual_override = TRUE,
-        note = $3,
+        note = $3::text,
         checkin_time = CASE
-          WHEN $4::timestamp IS NOT NULL THEN $4::timestamp
+          WHEN $4::text IS NOT NULL THEN $4::text::timestamp
           WHEN $1 = 'absent' THEN NULL
           ELSE COALESCE(ar.checkin_time, CURRENT_TIMESTAMP)
         END,
         updated_at = CURRENT_TIMESTAMP
-      FROM attendance_sessions s
-      WHERE ar.record_id = $5
-        AND ar.session_id = $6
-        AND s.session_id = ar.session_id
+      WHERE ar.record_id = $5::bigint
+        AND ar.session_id = $6::bigint
       RETURNING ar.*
     `, [
       normalizedStatus,
       recognition_status || 'manual_marked',
       note?.trim() || null,
-      checkin_time || null,
+      parsedCheckinTime,
       req.params.recordId,
       req.params.sessionId,
     ]);
