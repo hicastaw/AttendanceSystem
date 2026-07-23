@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lab Access — Quản lý điểm danh ra/vào</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <section id="login-view" class="view">
+    <div class="card login-card">
+      <h1>Lab Access</h1>
+      <p class="muted">Đăng nhập quản trị</p>
+      <form id="login-form">
+        <input type="password" id="login-password" placeholder="Mật khẩu admin" autofocus required />
+        <button type="submit">Đăng nhập</button>
+      </form>
+      <p id="login-error" class="error"></p>
+    </div>
+  </section>
+
+  <section id="app-view" class="view hidden">
+    <header>
+      <h1>Lab Access</h1>
+      <button id="logout-btn" class="link-btn">Đăng xuất</button>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="register">Đăng ký khuôn mặt</button>
+      <button class="tab-btn" data-tab="logs">Xem log</button>
+    </nav>
+
+    <div id="tab-register" class="tab-panel">
+      <div class="card">
+        <h2>1. Người dùng</h2>
+        <div class="row">
+          <input id="reg-code" placeholder="Mã người dùng (vd: NV001)" />
+          <input id="reg-name" placeholder="Họ tên" />
+          <input id="reg-email" placeholder="Email (tuỳ chọn)" />
+          <button id="reg-create-btn">Tạo / dùng người dùng này</button>
+        </div>
+        <p id="reg-user-status" class="muted"></p>
+      </div>
+
+      <div class="card">
+        <h2>2. Ảnh khuôn mặt</h2>
+        <div class="row">
+          <button id="cam-start-btn">Bật camera</button>
+          <button id="cam-capture-btn" disabled>Chụp ảnh</button>
+          <label class="file-btn">
+            Hoặc chọn ảnh từ máy
+            <input type="file" id="reg-file-input" accept="image/*" hidden />
+          </label>
+        </div>
+        <div class="preview-row">
+          <video id="cam-video" autoplay muted playsinline class="hidden"></video>
+          <canvas id="cam-canvas" class="hidden"></canvas>
+          <img id="reg-preview" class="hidden" />
+        </div>
+        <button id="reg-save-btn" disabled>Lưu khuôn mặt</button>
+        <p id="reg-result" class="muted"></p>
+      </div>
+    </div>
+
+    <div id="tab-logs" class="tab-panel hidden">
+      <div class="card">
+        <div class="row">
+          <input id="log-filter-code" placeholder="Lọc theo mã người dùng (tuỳ chọn)" />
+          <button id="log-refresh-btn">Làm mới</button>
+        </div>
+        <table id="log-table">
+          <thead>
+            <tr><th>Thời gian</th><th>Mã</th><th>Họ tên</th><th>Sự kiện</th><th>Độ tin cậy</th><th>Thiết bị</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <script src="app.js"></script>
+</body>
+</html>
