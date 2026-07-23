@@ -128,6 +128,7 @@ def main():
     frame_index = 0
     fps_window_start = time.time()
     fps_window_count = 0
+    last_recognition_log = 0.0
 
     logger.info(
         "Bắt đầu vòng lặp camera (device=%s, backend nhận diện=%s). Ctrl+C hoặc SIGTERM để dừng.",
@@ -180,6 +181,18 @@ def main():
                     aligned = align_face(frame, face)
                     embedding = recognizer.get_embedding(aligned)
                     if embedding is not None:
+                        candidate = decision.best_match(embedding, known_embeddings)
+                        if candidate is not None:
+                            entry, score = candidate
+                            similarity = score
+                            if now - last_recognition_log >= 5:
+                                logger.info(
+                                    "Nhận diện gần nhất: %s, similarity=%.1f%% (ngưỡng %.1f%%)",
+                                    entry["user_code"], score * 100,
+                                    decision.similarity_threshold * 100,
+                                )
+                                last_recognition_log = now
+
                         result = decision.match(embedding, known_embeddings)
                         if result is not None:
                             entry, score = result

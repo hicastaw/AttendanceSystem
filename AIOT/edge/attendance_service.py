@@ -37,6 +37,14 @@ class AttendanceDecision:
 
     def match(self, embedding, known_embeddings):
         """known_embeddings: list[{user_code, full_name, embedding(np.ndarray đã normalize)}]"""
+        best_match = self.best_match(embedding, known_embeddings)
+        if best_match is None or best_match[1] < self.similarity_threshold:
+            return None
+        return best_match
+
+    @staticmethod
+    def best_match(embedding, known_embeddings):
+        """Trả về ứng viên tốt nhất kèm score, kể cả khi chưa đủ ngưỡng."""
         best = None
         best_score = -1.0
         for entry in known_embeddings:
@@ -44,7 +52,7 @@ class AttendanceDecision:
             if score > best_score:
                 best_score = score
                 best = entry
-        if best is None or best_score < self.similarity_threshold:
+        if best is None:
             return None
         return best, best_score
 

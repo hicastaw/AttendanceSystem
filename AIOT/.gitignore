@@ -1,0 +1,3 @@
+# Local runtime state; never include these in a source handoff.
+server/ai/.venv*/
+server/data/

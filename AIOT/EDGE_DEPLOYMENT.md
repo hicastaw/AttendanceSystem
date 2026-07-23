@@ -1,5 +1,8 @@
 # Triển khai PoC "Lab Access" — hướng dẫn từng bước
 
+> Trạng thái triển khai thực tế và các việc đang dở được ghi tại `HANDOFF.md`.
+> Người tiếp nhận nên đọc file đó trước khi chạy lại hướng dẫn này.
+
 > PoC: 1 camera (Logitech C920) → 1 Orange Pi PC (ARMv7, Armbian/Debian Trixie)
 > → 1 laptop (server + trang quản lý, hoàn toàn mới, KHÔNG dùng lại
 > `backend/`/`frontend/` của project gốc).
