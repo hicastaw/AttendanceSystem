@@ -10,6 +10,11 @@ import cv2
 import numpy as np
 import onnxruntime as ort
 import os
+import sys
+from pathlib import Path
+sys.path.insert(0,str(Path(__file__).resolve().parents[3] / 'edge'))
+from model_contract import verify_legacy_model
+from pipeline import normalize
 
 
 class FaceEngine:
@@ -21,6 +26,8 @@ class FaceEngine:
 
             base_dir = os.path.dirname(os.path.abspath(__file__))
             model_path = os.path.join(base_dir, "..", "model")
+            verify_legacy_model(Path(model_path) / 'face_detection_yunet_2023mar.onnx')
+            verify_legacy_model(Path(model_path) / 'w600k_mbf.onnx')
 
             cls._instance.detector = cv2.FaceDetectorYN.create(
                 model=os.path.join(model_path, "face_detection_yunet_2023mar.onnx"),
@@ -60,7 +67,4 @@ class FaceEngine:
         )
         net_out = self.rec_session.run(None, {self.rec_input_name: blob})[0]
         embedding = net_out.flatten()
-        norm = np.linalg.norm(embedding)
-        if norm > 0:
-            embedding = embedding / norm
-        return embedding
+        return normalize(embedding).astype(np.float32)

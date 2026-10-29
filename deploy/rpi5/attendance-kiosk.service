@@ -1,0 +1,12 @@
+[Unit]
+Description=Chromium in the logged-in labwc session
+
+[Service]
+Type=simple
+ExecStart=/bin/bash /opt/attendance/current/deploy/rpi5/kiosk_launcher.sh
+Restart=always
+RestartSec=5
+Environment=KIOSK_URL=http://127.0.0.1:3001/kiosk.html
+
+# This is a USER unit, started from labwc autostart after environment import.
+# Do not install in /etc/systemd/system or run Chromium as root.

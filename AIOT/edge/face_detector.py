@@ -7,12 +7,14 @@ import logging
 import time
 
 import cv2
+from model_contract import verify_legacy_model
 
 logger = logging.getLogger(__name__)
 
 
 class FaceDetector:
     def __init__(self, model_path, score_threshold=0.80, nms_threshold=0.3):
+        verify_legacy_model(model_path)
         t0 = time.time()
         self._detector = cv2.FaceDetectorYN.create(
             model=model_path,

@@ -1,0 +1,68 @@
+/**
+ * YIRLoDT Design Tokens & Base Theme System
+ * Young Innovation Research Laboratory on Digital Technology – PTIT
+ * Brand Colors: Brick Red (#9D3032), Coral Red (#E0523A), Warm Orange (#F1934D), Deep Charcoal (#120A05)
+ */
+
+:root {
+  /* Brand Palette Core */
+  --yir-red-brick: #9D3032;
+  --yir-red-coral: #E0523A;
+  --yir-orange: #F1934D;
+  --yir-amber: #F59E0B;
+  --yir-dark-base: #120A05;
+  --yir-dark-surface: #1C110B;
+  --yir-dark-card: #251710;
+  --yir-dark-border: #3D261C;
+  --yir-dark-border-subtle: rgba(241, 147, 77, 0.15);
+  
+  --yir-light-base: #FBF9F7;
+  --yir-light-surface: #FFFFFF;
+  --yir-light-card: #FFFFFF;
+  --yir-light-border: #E8E0D9;
+  --yir-light-border-subtle: rgba(157, 48, 50, 0.12);
+  --yir-light-text: #231006;
+  --yir-light-muted: #6B5E55;
+
+  /* Brand Gradients */
+  --yir-gradient-brand: linear-gradient(135deg, #9D3032 0%, #E0523A 52%, #F1934D 100%);
+  --yir-gradient-glow: radial-gradient(circle at 50% 20%, rgba(224, 82, 58, 0.15) 0%, transparent 65%);
+  --yir-gradient-warm-border: linear-gradient(135deg, rgba(224, 82, 58, 0.4), rgba(241, 147, 77, 0.2));
+
+  /* Status Colors (WCAG AA Compliant) */
+  --yir-status-success: #10B981;
+  --yir-status-success-bg: rgba(16, 185, 129, 0.12);
+  --yir-status-warning: #F59E0B;
+  --yir-status-warning-bg: rgba(245, 158, 11, 0.12);
+  --yir-status-error: #EF4444;
+  --yir-status-error-bg: rgba(239, 68, 68, 0.12);
+  --yir-status-info: #3B82F6;
+  --yir-status-info-bg: rgba(59, 130, 246, 0.12);
+
+  /* Typography */
+  --yir-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --yir-font-mono: 'DM Mono', Consolas, 'SF Mono', Menlo, Monaco, monospace;
+  
+  /* Touch target standard */
+  --yir-touch-min: 48px;
+  --yir-radius-sm: 6px;
+  --yir-radius-md: 10px;
+  --yir-radius-lg: 16px;
+  --yir-radius-xl: 24px;
+}
+
+/* Accessibility Focus Ring */
+:focus-visible {
+  outline: 2px solid var(--yir-orange);
+  outline-offset: 3px;
+}
+
+/* Reduced Motion Preference */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

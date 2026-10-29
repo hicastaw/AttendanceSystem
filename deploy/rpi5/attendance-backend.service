@@ -1,0 +1,23 @@
+[Unit]
+Description=AIOT local attendance API and static administration UI
+After=local-fs.target
+
+[Service]
+Type=simple
+User=kiosk
+Group=kiosk
+WorkingDirectory=/opt/attendance/current/AIOT/server
+EnvironmentFile=/etc/attendance/server.env
+Environment=NODE_ENV=production
+Environment=TZ=Asia/Ho_Chi_Minh
+ExecStart=/usr/bin/node src/index.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+NoNewPrivileges=true
+UMask=0077
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

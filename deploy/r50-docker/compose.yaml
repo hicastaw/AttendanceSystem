@@ -1,0 +1,46 @@
+name: attendance-r50-demo
+services:
+  demo:
+    image: attendance-r50-demo:local
+    build:
+      context: ../..
+      dockerfile: deploy/r50-docker/Dockerfile
+    ports:
+      - "127.0.0.1:3080:3080"
+    environment:
+      TZ: Asia/Ho_Chi_Minh
+      DEMO_THREADS: "4"
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+    volumes:
+      - demo-data:/tmp/aiot-software-test-docker
+      - type: bind
+        source: ../../AIOT/edge/model/det_10g.onnx
+        target: /app/AIOT/edge/model/det_10g.onnx
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ../../AIOT/edge/model/ms1mv3_r50.onnx
+        target: /app/AIOT/edge/model/ms1mv3_r50.onnx
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ../../AIOT/edge/model/r50-experimental-laptop.json
+        target: /app/AIOT/edge/model/r50-experimental-laptop.json
+        read_only: true
+        bind:
+          create_host_path: false
+    init: true
+    stop_grace_period: 15s
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3080/api/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      start_period: 120s
+      retries: 3
+volumes:
+  demo-data:

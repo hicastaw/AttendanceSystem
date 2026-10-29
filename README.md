@@ -1,217 +1,140 @@
-# 🎓 AttendanceSystem – Hệ Thống Điểm Danh Khuôn Mặt
+# YIRLoDT AttendanceSystem – AIOT
 
-Hệ thống điểm danh tự động sử dụng nhận diện khuôn mặt, xây dựng với **React + Vite** (Frontend), **Node.js + Express** (Backend), **Python FastAPI** (AI Service) và **PostgreSQL + pgvector** (Database).
+Hệ thống điểm danh khuôn mặt cho phòng lab: **SCRFD-10G + ArcFace R50**, Python worker sở hữu camera, Node.js/Express, SQLite và giao diện HTML/CSS/JavaScript.
 
----
+MVP hiện tập trung vào demo trên **Windows laptop**. Raspberry Pi 5 là hướng triển khai tiếp theo bằng Raspberry Pi OS và systemd; Hailo NPU là bước đánh giá riêng.
 
+## Chức năng và giao diện
 
-## ✅ Nâng cấp đã bổ sung trong bản hoàn chỉnh
-
-- Thêm **manual override** cho bản ghi điểm danh trong Dashboard giáo viên.
-- Thêm nút **chốt phiên (submit)** để khóa nghiệp vụ sau khi đã kiểm tra kết quả.
-- Sửa API **global sessions** để tạo phiên hợp lệ theo nhiều học phần, không còn xung đột `section_id NOT NULL`.
-- Hoàn thiện luồng **hủy manual override** để hệ thống tự tính lại trạng thái theo dữ liệu check-in gốc.
-- Kiểm tra lại frontend và build thành công bằng Vite production build.
-
-## 📋 Yêu cầu hệ thống
-
-| Công cụ | Phiên bản khuyến nghị |
+| Chức năng MVP | Nội dung |
 |---|---|
-| [Docker Desktop](https://www.docker.com/products/docker-desktop/) | ≥ 4.x |
-| [Docker Compose](https://docs.docker.com/compose/) | ≥ 2.x (đi kèm Docker Desktop) |
-| Node.js *(chỉ cần nếu chạy local)* | ≥ 20.x |
-| Python *(chỉ cần nếu chạy local)* | ≥ 3.11 |
+| Face Enrollment | Tạo/chọn thành viên bằng tên và mã; đăng ký bằng **một ảnh từ webcam hoặc một ảnh JPEG/PNG tải lên**; kiểm tra ảnh đã được backend xác thực, xác nhận danh tính rồi Save. |
+| Face Recognition | Nhận diện thành viên đã đăng ký bằng webcam với gallery cùng model contract. |
+| Daily Attendance | Tự động ghi tối đa một check-in/thành viên/ngày theo `Asia/Ho_Chi_Minh` trong demo R50. |
+| Attendance Statistics | Thống kê tuần/tháng và lịch sử điểm danh của thành viên. |
 
----
+Ba trang chính dùng chung origin của launcher:
 
-## 🚀 Cách 1: Chạy toàn bộ bằng Docker (Khuyên dùng)
-
-> Đây là cách đơn giản nhất. Docker sẽ tự động cài đặt và khởi chạy tất cả dịch vụ.
-
-### Bước 1: Clone repository
-
-```bash
-git clone https://github.com/hicastaw/AttendanceSystem.git
-cd AttendanceSystem
-```
-
-### Bước 2: Khởi chạy toàn bộ hệ thống
-
-```bash
-docker compose up --build
-```
-
-> ⏳ **Lần đầu chạy sẽ mất khoảng 3–5 phút** để tải image và cài đặt dependencies.  
-> Database sẽ tự động được khởi tạo cùng dữ liệu demo (160 sinh viên, 16 học phần, 64 phiên điểm danh).
-
-### Bước 3: Truy cập ứng dụng
-
-| Dịch vụ | URL |
+| Trang | Đường dẫn |
 |---|---|
-| 🌐 Frontend (Giao diện chính) | http://localhost:5173 |
-| 👨‍🏫 Dashboard Giáo viên | http://localhost:5173/teacher |
-| 🔧 Backend API | http://localhost:3001 |
-| 🤖 AI Service | http://localhost:8001 |
-| 🗄️ pgAdmin (Quản lý DB) | http://localhost:5050 |
+| **Admin Portal** – thành viên, thống kê, lịch sử/log, CSV và diagnostics | `/` |
+| **Face Enrollment** – đăng ký khuôn mặt | `/r50-capture.html` |
+| **Face Attendance** – nhận diện và check-in | `/lab-kiosk.html` |
 
-> **Đăng nhập pgAdmin:**  
-> Email: `admin@example.com` | Mật khẩu: `admin123`
+Đăng nhập Admin bằng mật khẩu do launcher tạo cho phiên hiện tại. Enrollment có thể yêu cầu đăng nhập riêng; không giả định tự động dùng chung phiên đăng nhập. Preview trên Attendance cần phiên Admin hợp lệ từ Admin Portal.
 
-### Dừng hệ thống
+## Kiến trúc
 
-```bash
-# Dừng nhưng giữ lại dữ liệu
-docker compose down
+~~~text
+Webcam do một Python worker quản lý
+    → SCRFD-10G → alignment 5 điểm → ArcFace R50
+    → gallery cùng contract → matching
+    → durable outbox → Express API → SQLite + receipt
+    → kiosk-state → Face Attendance và thống kê
+~~~
 
-# Dừng và xóa toàn bộ dữ liệu (reset sạch)
-docker compose down -v
-```
+Preview là JPEG từ cùng worker qua Express có xác thực; các trang native không mở thêm camera. Ảnh upload đi qua cùng detector/alignment/recognizer, nhưng **không chứng minh sự hiện diện và không tự tạo check-in**.
 
-### Reset và chạy lại từ đầu
+- Chỉ xác nhận check-in sau khi backend đã commit dữ liệu hoặc receipt.
+- Giữ ngưỡng nhận diện, từ chối unknown/nhiều khuôn mặt và guard freshness 5 giây cho frame camera.
+- Demo R50 dùng `isolated-r50-laptop-test`. Đường chạy ordinary/production vẫn giữ quy tắc lịch/occurrence/cooldown hiện có; daily policy của demo không thay thế lịch sử production.
+- R50 ONNX, R50 HEF và MobileFaceNet có gallery/contract riêng, không trộn hoặc chuyển nhãn embedding.
 
-```bash
-docker compose down -v
-docker compose up --build
-```
+## Chạy demo trên Windows
 
----
+Chạy các lệnh từ **thư mục gốc repository**, bằng PowerShell. Môi trường đang dùng để kiểm thử: CPython **3.11.5 64-bit** và Node.js **24.18.0**.
 
-## 🛠️ Cách 2: Chạy thủ công (Local Development)
+### 1. Chuẩn bị môi trường
 
-Cần mở **4 terminal riêng biệt**, mỗi terminal chạy một dịch vụ.
+Với clone mới hoặc máy mới, tạo venv riêng và cài dependencies theo repository:
 
-### Yêu cầu trước khi chạy
+~~~powershell
+py -3.11 -m venv .venv/laptop-r50-manual
+$python = (Resolve-Path '.venv/laptop-r50-manual/Scripts/python.exe').Path
 
-- Cài **PostgreSQL 16** + extension **pgvector**
-- Tạo database và chạy các file SQL trong thư mục `backend/database/docker-entrypoint-initdb.d/` theo **thứ tự tên file**
+& $python -m pip install -r tools/requirements-test.txt
+& $python -m pip check
+npm.cmd ci --prefix AIOT/server
+node tools/run_r50_laptop_test.mjs --check-deps
+~~~
 
-### Terminal 1 – Backend (Node.js)
+Nếu workspace đã có môi trường đang hoạt động, dùng lại interpreter đã kiểm tra; không chạy lại bước tạo venv/cài dependencies lên môi trường dùng chung.
 
-```bash
-cd backend
-npm install
-npm run dev
-```
+**Model phải được chuẩn bị riêng:** launcher đọc `AIOT/edge/model/r50-experimental-laptop.json` và kiểm SHA/tensor của các artifact được descriptor chỉ định. Model weights không thuộc bộ tài liệu/source đề xuất công khai. Xem [quy định model artifacts](AIOT/edge/model/README.md); không sửa hash hoặc tắt validation để bỏ qua model không khớp. Cần có quyền sử dụng artifact phù hợp.
 
-> Backend chạy tại: http://localhost:3001
+### 2. Khởi động webcam khi người tham gia đã đồng ý
 
-### Terminal 2 – Frontend (React + Vite)
+Chọn rõ camera index; ví dụ camera `0`:
 
-```bash
-cd frontend
-npm install
-npm run dev
-```
+~~~powershell
+$python = (Resolve-Path '.venv/laptop-r50-manual/Scripts/python.exe').Path
+node tools/run_r50_laptop_test.mjs --python "$python" --camera 0 --allow-camera --threads 4
+~~~
 
-> Frontend chạy tại: http://localhost:5173
+Dùng đúng **origin loopback và mật khẩu tạm được in trong terminal**, không dùng URL/port của phiên trước. Giữ terminal mở.
 
-### Terminal 3 – AI Service (Python FastAPI)
+1. Vào Admin Portal và đăng nhập.
+2. Vào Face Enrollment, tạo/chọn đúng thành viên; chọn webcam hoặc một ảnh upload.
+3. Chờ backend xác thực; xem ảnh xác nhận đã đóng băng, xác nhận đúng người rồi Save.
+4. Chờ gallery sẵn sàng hoặc dùng `restart-worker` để kiểm tra profile được reload.
+5. Vào Face Attendance, cho thành viên xuất hiện trước webcam; kiểm tra check-in đã commit và thống kê trong Admin.
+6. Thử lại cùng ngày: không thêm dòng điểm danh thứ hai. Unknown/nhiều khuôn mặt không được tạo attendance.
 
-```bash
-cd backend/ai
-pip install -r requirements.txt
-uvicorn main:app --host 0.0.0.0 --port 8001
-```
+Nếu cần kiểm tra upload không tự điểm danh, cho người vừa đăng ký rời khỏi khung hình trước Save trong khi camera vẫn chạy. Một frame live hợp lệ sau Save có thể tự động tạo check-in.
 
-> AI Service chạy tại: http://localhost:8001
+### 3. Restart và dừng
 
-### Biến môi trường cho Backend (tạo file `backend/.env`)
+Gõ vào terminal launcher rồi nhấn Enter:
 
-```env
-PORT=3001
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=attendance_db
-DB_USER=attendance_user
-DB_PASSWORD=attendance_pass
-AI_SERVICE_URL=http://localhost:8001
-UPLOAD_DIR=uploads
-```
-
----
-
-## 🗂️ Cấu trúc thư mục
-
-```
-attsys_work/
-├── docker-compose.yml        # Cấu hình Docker Compose
-├── frontend/                 # React + Vite + TailwindCSS
-│   ├── src/
-│   │   ├── components/       # Các component React
-│   │   └── pages/            # Các trang (Teacher, Student...)
-│   └── Dockerfile
-├── backend/
-│   ├── src/                  # Node.js Express API
-│   ├── ai/                   # Python FastAPI – nhận diện khuôn mặt
-│   │   ├── main.py
-│   │   ├── core/             # Logic nhận diện
-│   │   ├── model/            # Model AI
-│   │   └── requirements.txt
-│   └── database/
-│       └── docker-entrypoint-initdb.d/  # SQL khởi tạo database
-└── README.md
-```
-
----
-
-## 🗄️ Thông tin Database
-
-| Thông số | Giá trị |
+| Lệnh | Tác dụng |
 |---|---|
-| Host | `localhost` (hoặc `postgres` trong Docker) |
-| Port | `5432` |
-| Database | `attendance_db` |
-| Username | `attendance_user` |
-| Password | `attendance_pass` |
+| `restart-worker` | Restart worker Python, giữ nguyên backend và DB/gallery/outbox của run hiện tại. |
+| `stop` | Dừng các tiến trình do launcher sở hữu và xóa dữ liệu tạm khi cleanup bình thường thành công. |
 
----
+Một lần mở launcher mới bắt đầu với dữ liệu mới. **Native demo không phải kho dữ liệu lab lâu dài.** Nếu shutdown/cleanup báo lỗi, giữ lại bằng chứng đã lược bỏ thông tin nhạy cảm; không xóa nhầm thư mục hay database khác.
 
-## 📊 Dữ liệu Demo
+## Kiểm thử tự động
 
-Hệ thống được tích hợp sẵn bộ dữ liệu demo bao gồm:
+Thiết lập interpreter đúng trước khi chạy:
 
-- 👥 **160 sinh viên** với hồ sơ đầy đủ
-- 📚 **16 học phần** từ nhiều khoa
-- 📅 **64 phiên điểm danh** ở các trạng thái khác nhau (draft, open, submitted, closed)
+~~~powershell
+$python = (Resolve-Path '.venv/laptop-r50-manual/Scripts/python.exe').Path
+$env:TEST_PYTHON = $python
 
-> Sau khi chạy, vào **Dashboard Giáo viên** tại http://localhost:5173/teacher để xem dữ liệu demo.
+& $python -B -m unittest discover -s tools/tests -q
+npm.cmd test --prefix AIOT/server
+~~~
 
----
+Để bật integration fixture dùng ONNX thật, cần descriptor/model và bộ fixture public-domain đã được xác minh hash:
 
-## ❗ Xử lý lỗi thường gặp
+~~~powershell
+$env:CPU_R50_DESCRIPTOR = (Resolve-Path 'AIOT/edge/model/r50-experimental-laptop.json').Path
+$env:CPU_R50_FIXTURES = (Resolve-Path '.model-validation/public-domain-fixtures-20261020').Path
+npm.cmd run test:cpu --prefix AIOT/server
+~~~
 
-### Lỗi: `container attendance_pg is unhealthy`
+Browser tests cần Chromium của Playwright:
 
-Database cần nhiều thời gian để khởi tạo dữ liệu demo. Chạy lại:
+~~~powershell
+Push-Location AIOT/server
+npx.cmd --no-install playwright install chromium
+npm.cmd run test:browser
+Pop-Location
+~~~
 
-```bash
-docker compose up
-```
+Các lệnh cài đặt/kiểm thử trên là hướng dẫn chạy, không phải cam kết mọi suite đang PASS. Model/fixture thiếu có thể làm test skip hoặc fail; phải ghi rõ kết quả. Fixture ONNX và mock không thay thế nghiệm thu webcam với người thật. Xem [môi trường và testing](docs/SOFTWARE_ENVIRONMENT.md).
 
-*(Không cần `--build` lại, Docker sẽ tự nhận biết database đã sẵn sàng.)*
+## Docker và Raspberry Pi
 
-### Lỗi: Port đã bị chiếm dụng
+- **Native Windows là luồng demo ưu tiên.** Docker Compose ở `deploy/r50-docker/` là lựa chọn laptop riêng, còn cần xác minh các giới hạn routing/camera/packaging và webcam thực tế. Xem [README Docker](deploy/r50-docker/README.md).
+- Docker demo dùng named volume riêng, có thể giữ dữ liệu qua lần dừng; vòng đời này khác native temporary run. Không xóa volume hoặc dùng dữ liệu lab hiện có làm dữ liệu test.
+- Pi 5 sẽ có kế hoạch native Raspberry Pi OS, systemd, camera CSI và SQLite persistent riêng. Chưa có nghiệm thu Pi/Hailo hay production R50; không dùng kết quả laptop làm bằng chứng phần cứng.
+- `backend/`, `frontend/` và `docker-compose.yml` ở root là stack **legacy React/PostgreSQL/pgvector**; chúng không phải lệnh khởi động của AIOT MVP.
 
-Kiểm tra và dừng ứng dụng đang dùng cổng 5173, 3001, 8001, hoặc 5432.
+## Tài liệu và dữ liệu công khai
 
-```bash
-# Windows – kiểm tra port 5173
-netstat -ano | findstr :5173
-```
+Xem [danh mục tài liệu chọn lọc cho GitHub](docs/README.md), gồm cả các file Markdown ở ngoài `docs/`.
 
-### Reset toàn bộ dữ liệu
+Chỉ công khai source, cấu hình mẫu và tài liệu đã rà soát. Không đưa lên GitHub: `.env`, mật khẩu/token, ảnh/video người tham gia, embeddings/gallery, SQLite/outbox, bản backup, log/HAR/screenshot có dữ liệu cá nhân hoặc model weights chưa có quyền phân phối.
 
-```bash
-docker compose down -v
-docker compose up --build
-```
-
----
-
-## 👥 Thành viên nhóm
-
-| Tên | GitHub |
-|---|---|
-| Trần Trung Hiếu | [@hicastaw](https://github.com/hicastaw) |
-| Lê Quang Vinh | [@vinlee15](https://github.com/vinlee15) |
-| Vietsnowman | [@Vietsnowman](https://github.com/Vietsnowman) |
+Trạng thái hiện tại là **R50 laptop experimental**. Kiểm thử tự động có bằng chứng riêng; nghiệm thu webcam đầy đủ, độ chính xác/calibration, nguồn gốc/license model và triển khai kiosk dùng chung vẫn là các gate riêng.

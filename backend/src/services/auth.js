@@ -1,7 +1,8 @@
 import crypto from 'crypto';
 import pool from '../db.js';
 
-const TOKEN_SECRET = process.env.AUTH_SECRET || process.env.JWT_SECRET || 'attendance-system-dev-secret-change-me';
+const TOKEN_SECRET = process.env.AUTH_SECRET || process.env.JWT_SECRET || '';
+const secretConfigured = TOKEN_SECRET.length >= 32 && TOKEN_SECRET !== 'attendance-system-dev-secret-change-me';
 const TOKEN_TTL_SECONDS = parseInt(process.env.AUTH_TOKEN_TTL_SECONDS || '43200', 10);
 const HASH_ITERATIONS = parseInt(process.env.AUTH_HASH_ITERATIONS || '120000', 10);
 const HASH_KEY_LENGTH = 64;
@@ -58,6 +59,7 @@ export function verifyPassword(password, storedHash) {
 }
 
 export function createAccessToken(user) {
+  if (!secretConfigured) throw new Error('Configure AUTH_SECRET with at least 32 characters before issuing tokens');
   const header = { alg: 'HS256', typ: 'JWT' };
   const now = Math.floor(Date.now() / 1000);
   const payload = {
@@ -81,6 +83,7 @@ export function createAccessToken(user) {
 }
 
 export function verifyAccessToken(token) {
+  if (!secretConfigured) return null;
   try {
     const [encodedHeader, encodedPayload, signature] = String(token || '').split('.');
     if (!encodedHeader || !encodedPayload || !signature) return null;
@@ -93,7 +96,7 @@ export function verifyAccessToken(token) {
 
     const payload = JSON.parse(base64UrlDecode(encodedPayload));
     const now = Math.floor(Date.now() / 1000);
-    if (!payload?.sub || !payload?.role || !payload?.exp || payload.exp < now) {
+    if (!payload?.sub || !payload?.role || !Number.isFinite(payload?.exp) || payload.exp <= now) {
       return null;
     }
 
@@ -140,7 +143,11 @@ export async function ensureAuthSchema() {
 }
 
 export async function seedDemoAuthUsers() {
-  const adminHash = hashPassword(process.env.DEFAULT_ADMIN_PASSWORD || 'Admin@123');
+  if (process.env.SEED_DEMO_AUTH_USERS !== 'true') return;
+  if (!process.env.DEFAULT_ADMIN_PASSWORD || process.env.DEFAULT_ADMIN_PASSWORD.length<12) {
+    throw new Error('Explicit demo seeding requires DEFAULT_ADMIN_PASSWORD with at least 12 characters');
+  }
+  const adminHash = hashPassword(process.env.DEFAULT_ADMIN_PASSWORD);
   await pool.query(
     `INSERT INTO auth_users (username, password_hash, role, is_active, must_change_password)
      VALUES ('admin', $1, 'admin', TRUE, FALSE)

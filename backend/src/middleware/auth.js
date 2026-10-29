@@ -46,16 +46,8 @@ export function attachActor(req, _res, next) {
     }
   }
 
-  const roleHeader = String(req.header('x-user-role') || '').trim().toLowerCase();
-  const role = VALID_ROLES.has(roleHeader) ? roleHeader : 'anonymous';
-
-  req.actor = {
-    ...anonymous,
-    role,
-    lecturerCode: normalizeCode(req.header('x-lecturer-code')),
-    studentCode: normalizeCode(req.header('x-student-code')),
-    authMode: role === 'anonymous' ? 'none' : 'legacy-header',
-  };
+  // Identity/role headers are caller-controlled, never authentication.
+  req.actor = anonymous;
 
   next();
 }

@@ -1,0 +1,4 @@
+# Verified locally with native Windows CPython 3.11.9. Use a dedicated venv.
+-r ../AIOT/requirements-cpu.txt
+onnx==1.23.2
+httpx==0.28.1

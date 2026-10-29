@@ -1,6 +1,3 @@
-fastapi==0.115.0
-uvicorn==0.30.0
-opencv-python==4.10.0.84
-numpy==1.26.4
-onnxruntime==1.18.1
-python-multipart==0.0.9
+# Same portable CPU dependencies exercised by tools/requirements-test.txt.
+# Pi system-site-packages/Picamera2/Hailo remains a separate, unverified target.
+-r ../../requirements-cpu.txt

@@ -1,0 +1,2 @@
+# Laptop simulation only; shares baseline pins with the CPU service/tests.
+-r ../AIOT/requirements-base.txt

@@ -3,81 +3,288 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Lab Access — Quản lý điểm danh ra/vào</title>
+  <meta name="theme-color" content="#FBF9F7" />
+  <title>YIRLoDT · Quản trị thành viên và điểm danh Lab</title>
+  <link rel="stylesheet" href="/assets/yirlodt/yirlodt-tokens.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
-<body>
+<body class="yir-light">
 
   <section id="login-view" class="view">
     <div class="card login-card">
-      <h1>Lab Access</h1>
-      <p class="muted">Đăng nhập quản trị</p>
+      <div class="login-brand">
+        <svg class="brand-logo" viewBox="0 0 340 70" width="220" height="46" fill="none" role="img" aria-label="YIRLoDT">
+          <polygon points="22,2 40,12 40,34 22,44 4,34 4,12" stroke="url(#yirLogGrad)" stroke-width="2.5" fill="none" />
+          <circle cx="22" cy="23" r="5.5" fill="#E0523A" />
+          <text x="56" y="36" font-family="'Inter', sans-serif" font-weight="900" font-size="26" fill="url(#yirLogGrad)">
+            YIR<tspan fill="#F1934D">L</tspan><tspan font-size="22" font-weight="800" dy="-2">o</tspan><tspan dy="2" font-weight="900">DT</tspan>
+          </text>
+          <text x="57" y="49" font-family="'DM Mono', monospace" font-size="7" font-weight="600" letter-spacing="0.14em" fill="#6B5E55">
+            RESEARCH LAB ON DIGITAL TECH · PTIT
+          </text>
+          <defs>
+            <linearGradient id="yirLogGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#9D3032" />
+              <stop offset="50%" stop-color="#E0523A" />
+              <stop offset="100%" stop-color="#F1934D" />
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+      <h1>Đăng nhập Quản trị viên</h1>
+      <p class="muted">Hệ thống điểm danh phòng Lab YIRLoDT · PTIT</p>
+      <p class="slogan-tag"><em>Ý tưởng hôm nay, kiến tạo ngày mai</em></p>
       <form id="login-form">
-        <input type="password" id="login-password" placeholder="Mật khẩu admin" autofocus required />
+        <input type="password" id="login-password" aria-label="Mật khẩu admin" autocomplete="current-password" placeholder="Nhập mật khẩu quản trị…" autofocus required />
         <button type="submit">Đăng nhập</button>
       </form>
-      <p id="login-error" class="error"></p>
+      <p id="login-error" class="error" role="alert"></p>
     </div>
   </section>
 
   <section id="app-view" class="view hidden">
     <header>
-      <h1>Lab Access</h1>
-      <button id="logout-btn" class="link-btn">Đăng xuất</button>
+      <div class="brand-wrap">
+        <a class="brand" href="/" title="YIRLoDT">
+          <svg class="brand-logo" viewBox="0 0 340 70" width="180" height="38" fill="none" role="img" aria-label="YIRLoDT">
+            <polygon points="22,2 40,12 40,34 22,44 4,34 4,12" stroke="url(#yirHeadGrad)" stroke-width="2.5" fill="none" />
+            <circle cx="22" cy="23" r="5.5" fill="#E0523A" />
+            <text x="56" y="36" font-family="'Inter', sans-serif" font-weight="900" font-size="26" fill="url(#yirHeadGrad)">
+              YIR<tspan fill="#F1934D">L</tspan><tspan font-size="22" font-weight="800" dy="-2">o</tspan><tspan dy="2" font-weight="900">DT</tspan>
+            </text>
+            <text x="57" y="49" font-family="'DM Mono', monospace" font-size="7" font-weight="600" letter-spacing="0.14em" fill="#6B5E55">
+              RESEARCH LAB ON DIGITAL TECH · PTIT
+            </text>
+            <defs>
+              <linearGradient id="yirHeadGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#9D3032" />
+                <stop offset="50%" stop-color="#E0523A" />
+                <stop offset="100%" stop-color="#F1934D" />
+              </linearGradient>
+            </defs>
+          </svg>
+        </a>
+        <span class="admin-portal-badge">PORTAL QUẢN TRỊ</span>
+      </div>
+      <div class="header-links">
+        <a href="/lab-kiosk.html" class="nav-link">⚡ Kiosk điểm danh</a>
+        <a href="/r50-capture.html" class="nav-link">📷 Đăng ký khuôn mặt</a>
+        <button id="logout-btn" class="link-btn">Đăng xuất</button>
+      </div>
     </header>
 
-    <nav class="tabs">
-      <button class="tab-btn active" data-tab="register">Đăng ký khuôn mặt</button>
-      <button class="tab-btn" data-tab="logs">Xem log</button>
+    <nav class="tabs" role="tablist">
+      <button class="tab-btn active" data-tab="dashboard" role="tab" aria-selected="true">📊 Thống kê điểm danh</button>
+      <button class="tab-btn" data-tab="members" role="tab" aria-selected="false">👥 Quản lý thành viên</button>
+      <button class="tab-btn" data-tab="logs" role="tab" aria-selected="false">📋 Nhật ký điểm danh</button>
+      <button class="tab-btn" data-tab="diagnostics" role="tab" aria-selected="false">🔬 Chẩn đoán nâng cao</button>
     </nav>
 
-    <div id="tab-register" class="tab-panel">
+    <div id="tab-dashboard" class="tab-panel">
       <div class="card">
-        <h2>1. Người dùng</h2>
+        <div class="section-title-wrap">
+          <h2>Bảng thống kê tần suất lên Lab</h2>
+          <span id="dash-range-label" class="muted">Múi giờ Asia/Ho_Chi_Minh · Tuần bắt đầu thứ Hai</span>
+        </div>
+        <div class="row controls-row">
+          <label>Tuần chứa ngày <input id="dash-week" type="date" aria-label="Chọn tuần"></label>
+          <label>Tháng <input id="dash-month" type="month" aria-label="Chọn tháng"></label>
+          <label class="search-label">Tìm thành viên <input id="dash-search" type="search" placeholder="🔍 Tên hoặc mã…"></label>
+          <div class="btn-group">
+            <button id="dash-refresh-btn" type="button" class="primary-btn">Cập nhật</button>
+            <button id="dash-export-csv" type="button" class="secondary-btn" title="Xuất báo cáo điểm danh tháng ra tệp CSV (Excel UTF-8 BOM)">Xuất CSV</button>
+          </div>
+        </div>
+        <p id="dash-status" class="muted" role="status" aria-live="polite"></p>
+
+        <div class="dash-summary-row">
+          <article class="metric-card">
+            <span class="metric-label">Tổng số thành viên</span>
+            <strong id="dash-member-count">0</strong>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Lượt người-ngày trong tuần</span>
+            <strong id="dash-week-total">0</strong>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Lượt người-ngày trong tháng</span>
+            <strong id="dash-month-total">0</strong>
+          </article>
+        </div>
+
+        <div class="table-container">
+          <table id="dash-table">
+            <thead>
+              <tr>
+                <th scope="col">Thành viên</th>
+                <th scope="col">Trong tuần</th>
+                <th scope="col">Trong tháng</th>
+                <th scope="col">Các ngày trong tháng</th>
+                <th scope="col">Lần check-in cuối</th>
+              </tr>
+            </thead>
+            <tbody id="dash-members">
+              <tr><td colspan="5" class="empty">Đang tải thống kê…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-members" class="tab-panel hidden">
+      <div class="card">
+        <h2>Thành viên đã đăng ký</h2>
         <div class="row">
-          <input id="reg-code" placeholder="Mã người dùng (vd: NV001)" />
-          <input id="reg-name" placeholder="Họ tên" />
-          <input id="reg-email" placeholder="Email (tuỳ chọn)" />
+          <input id="member-search" aria-label="Lọc thành viên" placeholder="🔍 Lọc theo mã hoặc họ tên..." />
+          <button id="member-refresh" type="button">Làm mới danh sách</button>
+        </div>
+        <p id="member-status" class="muted" role="status"></p>
+        <div class="table-container">
+          <table id="member-table">
+            <thead>
+              <tr><th>Mã</th><th>Họ tên</th><th>Hồ sơ</th><th>Trạng thái</th><th>Thao tác</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top: 20px;">
+        <h2>Thêm thành viên mới</h2>
+        <div class="row">
+          <input id="reg-code" aria-label="Mã thành viên" maxlength="64" placeholder="Mã người dùng (vd: NV001)" />
+          <input id="reg-name" aria-label="Họ tên" maxlength="200" placeholder="Họ tên" />
+          <input id="reg-email" aria-label="Email" maxlength="254" placeholder="Email (tuỳ chọn)" />
           <button id="reg-create-btn">Tạo / dùng người dùng này</button>
         </div>
         <p id="reg-user-status" class="muted"></p>
-      </div>
 
-      <div class="card">
-        <h2>2. Ảnh khuôn mặt</h2>
-        <div class="row">
-          <button id="cam-start-btn">Bật camera</button>
-          <button id="cam-capture-btn" disabled>Chụp ảnh</button>
-          <label class="file-btn">
-            Hoặc chọn ảnh từ máy
-            <input type="file" id="reg-file-input" accept="image/*" hidden />
+        <div class="row" style="margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--yir-border-subtle, #EBE5DF); display: flex; align-items: center; gap: 8px;">
+          <label style="font-size: 13px; color: var(--yir-text-secondary, #6B5E55);">
+            Ảnh chân dung (tuỳ chọn):
+            <input type="file" id="reg-file-input" accept="image/*" style="margin-left: 8px;" />
           </label>
+          <img id="reg-preview" alt="" class="hidden" style="max-height: 40px; border-radius: 4px;" />
+          <button id="reg-save-btn" type="button" disabled>Lưu ảnh</button>
+          <span id="reg-result" class="muted" style="font-size: 13px;"></span>
         </div>
-        <div class="preview-row">
-          <video id="cam-video" autoplay muted playsinline class="hidden"></video>
-          <canvas id="cam-canvas" class="hidden"></canvas>
-          <img id="reg-preview" class="hidden" />
-        </div>
-        <button id="reg-save-btn" disabled>Lưu khuôn mặt</button>
-        <p id="reg-result" class="muted"></p>
       </div>
     </div>
 
     <div id="tab-logs" class="tab-panel hidden">
       <div class="card">
+        <h2>Nhật ký điểm danh</h2>
         <div class="row">
-          <input id="log-filter-code" placeholder="Lọc theo mã người dùng (tuỳ chọn)" />
+          <input id="log-filter-code" aria-label="Lọc lịch sử theo mã thành viên" placeholder="Lọc theo mã người dùng (tuỳ chọn)" />
           <button id="log-refresh-btn">Làm mới</button>
         </div>
-        <table id="log-table">
-          <thead>
-            <tr><th>Thời gian</th><th>Mã</th><th>Họ tên</th><th>Sự kiện</th><th>Độ tin cậy</th><th>Thiết bị</th></tr>
-          </thead>
-          <tbody></tbody>
-        </table>
+        <p id="log-status" class="muted" role="status"></p>
+        <div class="table-container">
+          <table id="log-table">
+            <thead>
+              <tr><th>Thời gian (VN)</th><th>Mã</th><th>Họ tên</th><th>Loại</th><th>Sự kiện</th><th>Độ tin cậy</th><th>Thiết bị</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </div>
     </div>
+
+    <div id="tab-diagnostics" class="tab-panel hidden">
+      <div class="card">
+        <h2>Chẩn đoán Camera & Pipeline ArcFace R50</h2>
+        <p class="muted">Khung hình trực tiếp từ worker sở hữu camera, đo lường độ trễ SCRFD-10G detection và ArcFace R50 feature extraction.</p>
+        <div class="diag-grid">
+          <div class="diag-preview-box">
+            <div class="diag-preview-topbar">
+              <span>CAMERA PREVIEW</span>
+              <span id="diag-status" class="status-badge" data-state="wait">Connecting</span>
+            </div>
+            <div class="diag-image-wrap">
+              <img id="diag-preview" alt="Preview webcam chẩn đoán">
+              <div id="diag-placeholder" class="diag-placeholder">
+                <span class="loading-spinner"></span>
+                <span>Đang chờ khung hình từ camera owner…</span>
+              </div>
+            </div>
+            <p id="diag-state" class="muted" style="margin-top:8px;font-size:12px;"></p>
+          </div>
+          <div class="diag-metrics-box">
+            <div class="diag-metric-item">
+              <span class="metric-label">Số khuôn mặt phát hiện</span>
+              <strong id="diag-faces" class="metric-val">—</strong>
+            </div>
+            <div class="diag-metric-item">
+              <span class="metric-label">SCRFD-10G Detection</span>
+              <strong id="diag-detector" class="metric-val">—</strong> <small>ms</small>
+            </div>
+            <div class="diag-metric-item">
+              <span class="metric-label">5-Point Alignment</span>
+              <strong id="diag-alignment" class="metric-val">—</strong> <small>ms</small>
+            </div>
+            <div class="diag-metric-item">
+              <span class="metric-label">ArcFace R50 Extraction</span>
+              <strong id="diag-recognition" class="metric-val">—</strong> <small>ms</small>
+            </div>
+            <div class="diag-metric-item">
+              <span class="metric-label">Active Model Contract</span>
+              <span id="diag-contract" class="diag-contract-id">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-events" class="tab-panel hidden">
+      <div class="card">
+        <h2>Đặt sự kiện điểm danh</h2>
+        <p class="muted">Giờ Việt Nam (UTC+7). Mỗi thành viên một lần/sự kiện/ngày. Ngoài sự kiện vẫn ghi giờ đến. Giờ kết thúc không thuộc sự kiện; lịch đang bật không được chồng nhau.</p>
+        <form id="event-form">
+          <div class="row">
+            <input id="event-name" placeholder="Tên sự kiện" required />
+            <label>Bắt đầu <input id="event-start" type="time" required /></label>
+            <label>Kết thúc <input id="event-end" type="time" required /></label>
+            <label>Ngày cụ thể (bỏ trống = lịch tuần) <input id="event-date" type="date" /></label>
+            <input id="event-days" value="1,2,3,4,5,6" placeholder="Ngày tuần: 1=T2 ... 7=CN" />
+            <button type="submit">Tạo sự kiện</button>
+          </div>
+        </form>
+        <p id="event-status" class="muted"></p>
+        <div class="row" style="margin-top: 14px;">
+          <button id="event-refresh" type="button">Làm mới lịch</button>
+        </div>
+        <div class="table-container">
+          <table id="event-table">
+            <thead>
+              <tr><th>Tên</th><th>Khung giờ</th><th>Ngày áp dụng</th><th>Trạng thái</th><th>Thao tác</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p class="muted" style="margin-top: 10px;">Muốn thay khung giờ: tắt lịch cũ rồi tạo lịch mới. Lịch cũ và tên sự kiện đã ghi được giữ cho lịch sử.</p>
+      </div>
+    </div>
+
+    <!-- Preserved hidden legacy registration elements for backward compatibility -->
+    <div id="tab-register" class="tab-panel hidden" style="display:none;" aria-hidden="true">
+      <button id="cam-start-btn" type="button"></button>
+      <button id="cam-capture-btn" type="button"></button>
+      <video id="cam-video"></video>
+      <canvas id="cam-canvas"></canvas>
+    </div>
   </section>
+
+  <!-- Modal xác nhận thao tác nhạy cảm -->
+  <div id="confirm-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-card">
+      <h3 id="modal-title">Xác nhận thao tác</h3>
+      <p id="modal-message">Bạn có chắc chắn muốn thực hiện thao tác này?</p>
+      <div class="modal-actions">
+        <button type="button" id="modal-cancel-btn" class="secondary-btn">Hủy bỏ</button>
+        <button type="button" id="modal-confirm-btn" class="danger-btn">Xác nhận</button>
+      </div>
+    </div>
+  </div>
 
   <script src="app.js"></script>
 </body>

@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Điểm danh thành viên</title>
+  <link rel="stylesheet" href="/kiosk.css">
+  <script src="/kiosk.js" defer></script>
+</head>
+<body>
+  <header>
+    <strong>AIOT · Điểm danh đến</strong>
+    <div class="header-center">
+      <span id="schedule-pill" aria-label="Khung giờ điểm danh">Đang kiểm tra lịch…</span>
+      <span id="mode">Đang kết nối</span>
+      <time id="clock" aria-label="Thời gian hiện tại"></time>
+    </div>
+  </header>
+  <main>
+    <section class="guide" aria-label="Hướng dẫn điểm danh">
+      <div class="face-frame" aria-hidden="true">
+        <div class="oval-guide"></div>
+        <div class="scan-line"></div>
+        <div class="face-icon">◎</div>
+      </div>
+      <h1>Đứng trước camera</h1>
+      <p>Mỗi thành viên điểm danh một lần trong sự kiện.</p>
+      <p id="source">Đang kiểm tra thiết bị…</p>
+      <p>Chưa đăng ký? Liên hệ quản trị viên.</p>
+    </section>
+    <section class="result" id="result" role="status" aria-live="polite" aria-atomic="true">
+      <div id="symbol" aria-hidden="true">…</div>
+      <h2 id="title">Đang tải trạng thái</h2>
+      <p id="detail">Vui lòng chờ</p>
+      <p id="person"></p>
+      <time id="event-time"></time>
+      <div id="reset-bar" class="reset-progress" aria-hidden="true"></div>
+    </section>
+  </main>
+  <footer>
+    <span id="connection">Đang kết nối dịch vụ</span>
+    <div class="footer-nav">
+      <button type="button" id="retry">Kết nối lại</button>
+      <a href="/capture.html" title="Đăng ký khuôn mặt bằng camera kiosk">📷 Camera Capture</a>
+      <a href="/" title="Trang quản trị hệ thống">Quản trị / lịch sử</a>
+    </div>
+  </footer>
+</body>
+</html>
+

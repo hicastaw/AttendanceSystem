@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#120A05">
+  <title>YIRLoDT · Điểm danh nhận diện khuôn mặt</title>
+  <link rel="stylesheet" href="/assets/yirlodt/yirlodt-tokens.css">
+  <link rel="stylesheet" href="/lab-kiosk.css">
+  <script src="/lab-kiosk.js" defer></script>
+</head>
+<body>
+  <div class="kiosk-shell">
+    <header class="kiosk-header">
+      <div class="brand-wrap">
+        <a href="/" class="brand-link" title="YIRLoDT Admin Portal">
+          <svg class="brand-logo" viewBox="0 0 340 70" width="220" height="46" fill="none" role="img" aria-label="YIRLoDT">
+            <polygon points="22,2 40,12 40,34 22,44 4,34 4,12" stroke="url(#yirHeaderGrad)" stroke-width="2.5" fill="none" />
+            <circle cx="22" cy="23" r="5.5" fill="#E0523A" />
+            <text x="56" y="36" font-family="'Inter', sans-serif" font-weight="900" font-size="26" fill="url(#yirHeaderGrad)">
+              YIR<tspan fill="#F1934D">L</tspan><tspan font-size="22" font-weight="800" dy="-2">o</tspan><tspan dy="2" font-weight="900">DT</tspan>
+            </text>
+            <text x="57" y="49" font-family="'DM Mono', monospace" font-size="7" font-weight="600" letter-spacing="0.14em" fill="#A3968E">
+              RESEARCH LAB ON DIGITAL TECH · PTIT
+            </text>
+            <defs>
+              <linearGradient id="yirHeaderGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#9D3032" />
+                <stop offset="50%" stop-color="#E0523A" />
+                <stop offset="100%" stop-color="#F1934D" />
+              </linearGradient>
+            </defs>
+          </svg>
+        </a>
+      </div>
+
+      <div class="pipeline-badge">
+        <span class="badge-dot"></span>
+        <span class="badge-text">SCRFD-10G · ARCFACE R50</span>
+      </div>
+
+      <div class="time-wrap">
+        <time id="clock">--:--:--</time>
+        <span class="tz-tag">VN (GMT+7)</span>
+      </div>
+    </header>
+
+    <main class="kiosk-body">
+      <div class="kiosk-grid">
+        <!-- Live Camera View & Face Framing Guide -->
+        <section class="framing-zone" aria-label="Khu vực camera nhận diện">
+          <div class="camera-reticle">
+            <div id="camera-status-overlay" class="camera-status-overlay">
+              <span id="camera-status-spinner" class="camera-spinner"></span>
+              <span id="camera-status-text" class="camera-status-text">Đang kết nối camera…</span>
+            </div>
+            <img id="kiosk-camera-preview" class="kiosk-camera-img hidden" alt="Camera preview trực tiếp">
+            <div class="reticle-corner tl" aria-hidden="true"></div>
+            <div class="reticle-corner tr" aria-hidden="true"></div>
+            <div class="reticle-corner bl" aria-hidden="true"></div>
+            <div class="reticle-corner br" aria-hidden="true"></div>
+            <div class="face-oval-guide" aria-hidden="true">
+              <div class="oval-border"></div>
+              <div class="scan-beam"></div>
+              <div class="guide-caption">VÙNG NHẬN DIỆN</div>
+            </div>
+          </div>
+          <div id="confirmed-member-banner" class="confirmed-member-banner" hidden>
+            <span class="confirmed-check">✓</span>
+            <span id="confirmed-member-name" class="confirmed-member-name"></span>
+          </div>
+        </section>
+
+        <!-- Recognition Result Card -->
+        <section class="result-zone">
+          <div class="eyebrow-tag">LAB ATTENDANCE KIOSK</div>
+          <div id="card" data-state="idle" class="status-card">
+            <div id="icon" class="status-icon" aria-hidden="true">◎</div>
+            <p id="state" class="state-label">WAITING FOR CAMERA</p>
+            <h1 id="title" class="status-title">Đứng trước camera</h1>
+            <p id="detail" class="status-detail">Giữ khuôn mặt trong khung hình để check-in.</p>
+            <div id="member" class="member-name"></div>
+            <time id="event-time" class="event-timestamp"></time>
+          </div>
+
+          <div class="rule-box">
+            <span class="rule-icon">ℹ</span>
+            <p class="rule-text">Mỗi thành viên check-in tối đa <strong>1 lần / ngày</strong>. Không cần checkout. Múi giờ Asia/Ho_Chi_Minh.</p>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <footer class="kiosk-footer">
+      <div id="connection" class="connection-status" role="status">
+        <span class="conn-dot"></span> Đang kết nối dịch vụ…
+      </div>
+      <div class="brand-slogan">
+        <span>Ý tưởng hôm nay, kiến tạo ngày mai</span>
+      </div>
+      <!-- Discrete Admin Settings Button -->
+      <div class="kiosk-admin-trigger">
+        <button id="admin-settings-btn" class="settings-gear-btn" type="button" aria-label="Cài đặt quản trị" title="Cài đặt & Quản trị viên">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+          <span class="btn-text">Quản trị</span>
+        </button>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Discrete Admin Management Dialog (Preserves Backend Auth Barrier) -->
+  <dialog id="admin-dialog" class="admin-modal" aria-labelledby="admin-dialog-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 id="admin-dialog-title">Quản trị & Cài đặt hệ thống</h2>
+        <button id="close-dialog-btn" type="button" class="modal-close" aria-label="Đóng cửa sổ">✕</button>
+      </div>
+      <p class="modal-desc">
+        Khu vực dành cho Quản trị viên phòng Lab YIRLoDT và Kỹ thuật viên. Tất cả các trang đều yêu cầu xác thực bằng mật khẩu Admin.
+      </p>
+      <div class="admin-links-grid two-cols">
+        <a href="/" class="admin-menu-item">
+          <span class="item-icon">📊</span>
+          <div class="item-info">
+            <strong>Cổng Quản trị & Thống kê</strong>
+            <small>Quản lý thành viên, thống kê điểm danh, nhật ký & chẩn đoán camera</small>
+          </div>
+        </a>
+        <a href="/r50-capture.html" class="admin-menu-item">
+          <span class="item-icon">📷</span>
+          <div class="item-info">
+            <strong>Đăng ký khuôn mặt mới</strong>
+            <small>Lấy mẫu đa frame ArcFace R50 cho thành viên phòng Lab</small>
+          </div>
+        </a>
+      </div>
+      <div class="modal-footer">
+        <button id="cancel-dialog-btn" type="button" class="quiet-btn">Đóng cửa sổ</button>
+      </div>
+    </div>
+  </dialog>
+</body>
+</html>

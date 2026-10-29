@@ -8,6 +8,9 @@ check_in-check_out giờ nằm hoàn toàn ở thiết bị biên.
 """
 import sys
 import os
+from pathlib import Path
+import threading
+from functools import wraps
 import numpy as np
 import cv2
 
@@ -16,6 +19,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from core.face_engine import FaceEngine
+sys.path.insert(0,str(Path(__file__).resolve().parents[2] / 'edge'))
+from model_contract import LEGACY_CONTRACT
 
 app = FastAPI(title="AIOT Lab Access - AI Service", version="1.0.0")
 
@@ -30,16 +35,27 @@ MAX_FILE_SIZE = 10 * 1024 * 1024
 ALLOWED_FORMATS = ["image/jpeg", "image/png", "image/jpg"]
 
 engine = FaceEngine()
+inference_lock = threading.Lock()
+
+
+def serialized(function):
+    @wraps(function)
+    def call(*args, **kwargs):
+        with inference_lock:
+            return function(*args, **kwargs)
+    return call
 
 
 def validate_upload_file(file: UploadFile):
     if file.content_type not in ALLOWED_FORMATS:
         raise HTTPException(status_code=400, detail=f"Định dạng {file.content_type} không hỗ trợ. Chỉ nhận JPG/PNG.")
-    if file.size > MAX_FILE_SIZE:
+    if file.size is not None and file.size > MAX_FILE_SIZE:
         raise HTTPException(status_code=413, detail=f"File quá lớn ({file.size / 1024 / 1024:.2f}MB). Tối đa 10MB.")
 
 
 def decode_image(file_bytes: bytes) -> np.ndarray:
+    if not file_bytes or len(file_bytes)>MAX_FILE_SIZE:
+        raise HTTPException(status_code=413,detail='Empty or oversized image')
     nparr = np.frombuffer(file_bytes, np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     if img is None:
@@ -53,9 +69,10 @@ def health_check():
 
 
 @app.post("/ai/face/validate")
+@serialized
 def validate_face(face_image: UploadFile = File(...)):
     validate_upload_file(face_image)
-    img_bgr = decode_image(face_image.file.read())
+    img_bgr = decode_image(face_image.file.read(MAX_FILE_SIZE+1))
 
     h, w, _ = img_bgr.shape
     engine.detector.setInputSize((w, h))
@@ -68,6 +85,9 @@ def validate_face(face_image: UploadFile = File(...)):
             "error_code": "NO_FACE_DETECTED",
         }
 
+    if len(faces)!=1:
+        return {'is_valid':False,'embedding':None,'sharpness_score':0.0,
+                'message':'Ảnh cần đúng một khuôn mặt.','error_code':'MULTIPLE_FACES'}
     face = faces[0]
     if float(face[-1]) < 0.80:
         return {
@@ -89,6 +109,7 @@ def validate_face(face_image: UploadFile = File(...)):
     return {
         "is_valid": True,
         "embedding": embedding.tolist(),
+        "embedding_contract": LEGACY_CONTRACT,
         "sharpness_score": round(float(sharpness), 2),
         "message": "Ảnh hợp lệ.",
         "error_code": None,
@@ -96,11 +117,12 @@ def validate_face(face_image: UploadFile = File(...)):
 
 
 @app.post("/ai/face/extract")
+@serialized
 def extract_face(face_image: UploadFile = File(...)):
     """Dự phòng cho edge khi EMBEDDING_BACKEND=remote (xem
     AIOT/edge/face_recognizer.py:RemoteFaceRecognizer)."""
     validate_upload_file(face_image)
-    img_bgr = decode_image(face_image.file.read())
+    img_bgr = decode_image(face_image.file.read(MAX_FILE_SIZE+1))
 
     h, w, _ = img_bgr.shape
     engine.detector.setInputSize((w, h))
@@ -109,6 +131,8 @@ def extract_face(face_image: UploadFile = File(...)):
     if faces is None or len(faces) == 0:
         return {"found": False, "embedding": None, "error_code": "NO_FACE"}
 
+    if len(faces)!=1:
+        return {'found':False,'embedding':None,'error_code':'MULTIPLE_FACES'}
     face = faces[0]
     if float(face[-1]) < 0.70:
         return {"found": False, "embedding": None, "error_code": "LOW_CONFIDENCE"}
@@ -121,5 +145,18 @@ def extract_face(face_image: UploadFile = File(...)):
     return {
         "found": True,
         "embedding": embedding.tolist(),
+        "embedding_contract": LEGACY_CONTRACT,
         "confidence": round(float(face[-1]), 4),
     }
+
+
+@app.post('/ai/face/embed-aligned')
+@serialized
+def embed_aligned(face_image: UploadFile = File(...)):
+    """Explicit crop-only contract for the legacy edge; never detect/align twice."""
+    validate_upload_file(face_image)
+    image=decode_image(face_image.file.read(MAX_FILE_SIZE+1))
+    if image.shape != (112,112,3):
+        raise HTTPException(status_code=400,detail='Expected aligned BGR 112x112 crop')
+    return {'found':True,'embedding':engine.get_face_embedding(image).tolist(),
+            'embedding_contract':LEGACY_CONTRACT}

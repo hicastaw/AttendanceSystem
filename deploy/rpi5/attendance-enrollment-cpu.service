@@ -1,0 +1,19 @@
+[Unit]
+Description=Legacy CPU enrollment service (YuNet and MobileFaceNet only)
+After=local-fs.target
+
+[Service]
+Type=simple
+User=kiosk
+Group=kiosk
+WorkingDirectory=/opt/attendance/current/AIOT/server/ai
+ExecStart=/opt/attendance/venv-enrollment/bin/python -m uvicorn main:app --host 127.0.0.1 --port 8001 --workers 1
+Environment=TZ=Asia/Ho_Chi_Minh
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+NoNewPrivileges=true
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

@@ -6,7 +6,12 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch src/index.js",
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "test": "node --test --test-timeout=45000 ../../tools/test_event_ui.mjs ../../tools/test_event_backend_migration.mjs ../../tools/test_software_integration.mjs ../../tools/test_fixture_lifecycle.mjs ../../tools/test_release_contracts.mjs ../../tools/test_operational_tools.mjs ../../tools/test_autonomous_integration.mjs ../../tools/test_legacy_auth.mjs ../../tools/test_admin_auth.mjs ../../tools/test_cpu_preparation.mjs ../../tools/test_one_image_enrollment.mjs ../../tools/test_lab_attendance.mjs",
+    "test:aiot": "node --test --test-timeout=45000 ../../tools/test_event_ui.mjs ../../tools/test_event_backend_migration.mjs ../../tools/test_software_integration.mjs ../../tools/test_fixture_lifecycle.mjs ../../tools/test_release_contracts.mjs ../../tools/test_operational_tools.mjs ../../tools/test_autonomous_integration.mjs ../../tools/test_admin_auth.mjs ../../tools/test_cpu_preparation.mjs ../../tools/test_one_image_enrollment.mjs ../../tools/test_lab_attendance.mjs",
+    "test:cpu": "node --test --test-concurrency=1 --test-timeout=120000 ../../tools/test_cpu_preparation.mjs ../../tools/test_one_image_enrollment.mjs",
+    "test:browser": "playwright test",
+    "mock": "node ../../tools/run_mock.mjs"
   },
   "dependencies": {
     "axios": "^1.7.2",
@@ -15,6 +20,12 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "form-data": "^4.0.0",
-    "multer": "^1.4.5-lts.1"
+    "multer": "2.4.0"
+  },
+  "allowScripts": {
+    "better-sqlite3@11.10.0": true
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.0"
   }
 }

@@ -1,0 +1,31 @@
+[Unit]
+Description=AIOT single-camera attendance worker (explicit legacy provider until Hailo verification)
+After=local-fs.target attendance-backend.service
+Wants=attendance-backend.service
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=notify
+NotifyAccess=main
+User=kiosk
+Group=kiosk
+WorkingDirectory=/opt/attendance/current/AIOT
+EnvironmentFile=/etc/attendance/worker.env
+Environment=TZ=Asia/Ho_Chi_Minh
+ExecStart=/opt/attendance/venv-worker/bin/python -B edge/main.py
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=60
+TimeoutStopSec=20
+WatchdogSec=60
+KillMode=control-group
+NoNewPrivileges=true
+UMask=0077
+StateDirectory=attendance
+StateDirectoryMode=0700
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

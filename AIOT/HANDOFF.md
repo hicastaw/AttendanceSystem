@@ -1,6 +1,32 @@
-# Bàn giao PoC AIOT Lab Access
+# Bàn giao và tiến độ hiện tại — AIOT Lab Access
 
-Cập nhật: 2026-07-23
+> Cập nhật trạng thái: **14-10-2026 (Asia/Saigon)**. Nguồn chi tiết, bằng chứng kiểm thử và danh sách giới hạn: [SOFTWARE_IMPLEMENTATION_REPORT.md](../SOFTWARE_IMPLEMENTATION_REPORT.md). Nội dung PoC/Orange Pi PC bên dưới là lịch sử triển khai; không dùng nó để khẳng định trạng thái phần cứng của phiên bản hiện tại.
+
+## Trạng thái hiện tại
+
+| Hạng mục | Trạng thái | Ghi chú |
+|---|---|---|
+| MVP AIOT trên laptop Windows | `DONE_VERIFIED` | Backend SQLite, admin, kiosk, outbox/retry và luồng mô phỏng end-to-end đã được kiểm thử cục bộ. |
+| Nghiệp vụ điểm danh | `DONE_VERIFIED` | Chỉ ghi nhận **đến** theo sự kiện; không thêm check-out mới. Sáng 07:00–12:00, chiều 13:00–18:00, T2–T7 (UTC+7); ngoài sự kiện vẫn lưu timestamp với context null. |
+| Kiểm thử tự động cục bộ | `DONE_VERIFIED` | Báo cáo 14-10 ghi nhận 127 Python, 11 Node, 2 browser, API smoke và kiểm tra syntax/model đều PASS. Chưa chạy CI từ xa. |
+| Enrollment và nhận diện thật | `INCOMPLETE` | Legacy/mock API đã kiểm thử; chưa có enrollment nhiều frame với R50 và 30 người thật, chưa hiệu chỉnh accuracy/threshold. |
+| Raspberry Pi 5, Hailo-10H, CSI, màn hình, SSD | `BLOCKED_HARDWARE` | Chưa deploy, HIL, cold boot, soak hoặc đo hiệu năng trên thiết bị. |
+| SCRFD/R50, HEF và bộ dữ liệu đánh giá | `BLOCKED_ARTIFACT` | Chưa có checkpoint/model artifact/dataset đủ điều kiện để xác minh hoặc hiệu chỉnh. |
+| Deploy/systemd/CI remote | `EXISTS_UNVERIFIED` | Template và kiểm tra syntax có sẵn; chưa xác minh trên Linux/Pi hoặc GitHub Actions. |
+
+## Việc cần làm tiếp theo
+
+1. Cung cấp Pi 5/Hailo/camera/màn hình/SSD và xác minh từng hạng mục theo [báo cáo mục 7](../SOFTWARE_IMPLEMENTATION_REPORT.md#7-hardware-dependent-tasks).
+2. Cung cấp artifact SCRFD/R50/HEF hợp lệ cùng dataset có consent để kiểm strict-load, parity và calibration.
+3. Trước khi điểm danh người thật: thay/rotate mọi credential demo cũ, chạy HIL, recovery/power-loss và đánh giá accuracy; xem [P0](../SOFTWARE_IMPLEMENTATION_REPORT.md#p0--trước-khi-cho-điểm-danh-người-thật).
+
+---
+
+## Lịch sử PoC Orange Pi PC
+
+> Cập nhật phần mềm 12-10-2026: mục tiêu là quản lý khoảng 30 thành viên, **chỉ điểm danh đến theo sự kiện**, không toggle Vào/Ra. Sáng 07:00–12:00, chiều 13:00–18:00, T2–T7 (UTC+7); ngoài sự kiện vẫn lưu giờ đến với liên kết null. Đã kiểm thử Windows/DB tạm, chưa deploy phần cứng. Xem [báo cáo Mục 4](../docs/SOFTWARE_STEP_04_CHECKIN_ONLY.md) và [prompt đã thực hiện](../docs/PROMPT_SOFTWARE_STEP_04_CHECKIN_ONLY.md). Nội dung PoC bên dưới là lịch sử triển khai, không phải xác nhận HIL cho code mới.
+
+Cập nhật: 29-7-2026
 
 Tài liệu này ghi lại trạng thái thực tế đã triển khai trên laptop và Orange Pi
 PC. Đọc thêm `ARCHITECTURE.md` để hiểu thiết kế và `EDGE_DEPLOYMENT.md` để xem
@@ -32,17 +58,17 @@ và `frontend/` của hệ thống điểm danh gốc.
 | YuNet trên Orange Pi | Đạt | Load và detect được khuôn mặt |
 | MobileFaceNet trên ARMv7 | Đạt | `cv2.dnn.readNetFromONNX` load và infer được |
 | Đồng bộ embedding | Đạt | Edge tải được embedding từ laptop |
-| Nhận diện và gửi event | Đạt | Đã ghi nhận `SV001` vào/ra, confidence 52-53% |
+| Nhận diện và gửi event | Đạt | Đã ghi nhận `SV001` vào/ra, confidence 65-75% |
 | MJPEG debug stream | Đạt | Port `5000`, có bounding box và cooldown |
-| Benchmark hiệu năng | Chưa làm | Cần đo CPU, RAM, FPS, nhiệt độ và độ trễ |
+| Benchmark hiệu năng | đã làm | Cần đo CPU, RAM, FPS, nhiệt độ và độ trễ |
 | systemd/tự khởi động | Chưa làm | Chủ động dừng ở mức PoC chạy thủ công |
-| Mất mạng/mất camera | Chưa test đủ | Cần kiểm thử lại có ghi chép |
+| Mất mạng/mất camera | đã làm | Cần kiểm thử lại có ghi chép |
 
 Dữ liệu demo đã quan sát:
 
 - User `SV001`.
-- Một event `check_in`, confidence `52.53`.
-- Một event `check_out`, confidence `53.01`.
+- Một event `check_in`, confidence `72.23`.
+- Một event `check_out`, confidence `74.85`.
 - Sau khi gửi, stream hiện `[cooldown]` và không gửi lặp liên tục.
 
 ## 3. Môi trường đã dùng
@@ -63,7 +89,7 @@ Dữ liệu demo đã quan sát:
 - Code deploy tại `/opt/face-attendance-edge`.
 - Camera `/dev/video0`.
 - IP DHCP đã đổi từ `192.168.137.233` sang `192.168.137.216` sau reboot;
-  không coi `.216` là IP cố định.
+  không coi `.216` là IP cố định. Hiện tại là 162
 - MAC quan sát trên laptop: `02-81-48-68-28-72`.
 
 ## 4. Khởi động hệ thống hiện tại

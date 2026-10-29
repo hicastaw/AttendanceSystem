@@ -74,6 +74,12 @@ ipython_config.py
 # Virtual envs & environment files
 __pypackages__/
 .venv
+.deployment-audit/
+.model-validation/
+# Edge delivery ledger (including SQLite WAL/SHM); contains attendance metadata.
+edge-outbox*.db*
+member-gallery*.json
+member-gallery*.json.*.tmp
 venv/
 env/
 ENV/
@@ -174,3 +180,29 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 .pnp.*
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Local environments
+.venv/
+node_modules/
+.env
+.env.*
+!.env.example
+
+# Runtime data
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.log
+
+# Private runtime artifacts
+.model-validation/
+
+/docs/
+
+# Local AI model weights
+*.onnx
+*.pth
+*.pt
+*.hef

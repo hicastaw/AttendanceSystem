@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Đăng ký từ camera kiosk (Multi-frame)</title>
+  <link rel="stylesheet" href="capture.css">
+</head>
+<body>
+  <main>
+    <div class="capture-header">
+      <h1>Đăng ký nhiều frame từ camera Kiosk</h1>
+      <div class="header-links">
+        <a href="/">← Quản trị</a>
+        <a href="/kiosk.html">← Kiosk</a>
+      </div>
+    </div>
+    
+    <p class="desc">Chỉ dùng camera do worker sở hữu trên Kiosk. Không phải trang mô phỏng; không tự lưu khi chưa xác nhận đúng thành viên.</p>
+
+    <div class="card">
+      <form id="login">
+        <label>
+          Mật khẩu quản trị viên
+          <input id="password" type="password" autocomplete="current-password" placeholder="Nhập mật khẩu admin..." required>
+        </label>
+        <div>
+          <button type="submit">Đăng nhập</button>
+        </div>
+      </form>
+
+      <section id="controls" hidden>
+        <div class="control-bar">
+          <label>
+            Chọn thành viên cần thu thập mẫu
+            <select id="member"></select>
+          </label>
+          <button id="start" type="button">Bắt đầu lấy 5 mẫu</button>
+          <button id="cancel" type="button">Hủy / xóa mẫu RAM</button>
+          <button id="logout" type="button">Đăng xuất</button>
+        </div>
+
+        <div class="preview-container">
+          <div class="preview-wrapper">
+            <img id="preview" alt="Preview camera riêng tư, chỉ admin" width="640" height="480">
+            <div class="camera-guide-overlay" aria-hidden="true">
+              <div class="camera-guide-oval"></div>
+            </div>
+          </div>
+          <p class="desc" style="margin-top: 10px; margin-bottom: 0;">Hướng dẫn: Người được đăng ký đứng thẳng, mặt nằm trọn trong khung elip, không đeo khẩu trang hoặc kính râm.</p>
+        </div>
+
+        <label class="confirm-label">
+          <input id="confirm" type="checkbox">
+          <span>Tôi đã kiểm tra preview và xác nhận toàn bộ mẫu là đúng thành viên đã chọn.</span>
+        </label>
+
+        <p>
+          <button id="save" type="button" disabled>Lưu hồ sơ</button>
+        </p>
+      </section>
+
+      <p id="status" role="status" aria-live="polite">Chưa đăng nhập</p>
+    </div>
+
+    <div class="nav-footer">
+      <a href="/">Quản trị</a> · <a href="/kiosk.html">Kiosk</a>
+    </div>
+  </main>
+  <script src="capture.js"></script>
+</body>
+</html>

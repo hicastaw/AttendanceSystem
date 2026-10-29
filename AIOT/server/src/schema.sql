@@ -1,5 +1,5 @@
--- Schema tối giản cho PoC điểm danh ra/vào phòng lab bằng khuôn mặt.
--- Không có courses/classes/lecturers/sections/sessions — chỉ 3 bảng.
+-- Schema nhỏ cho quản lý thành viên và check-in theo sự kiện.
+-- users / face_profiles / access_events / scheduled_events; giữ check_out lịch sử.
 -- embedding lưu dạng TEXT (JSON.stringify của mảng 512 số) vì SQLite không có
 -- kiểu vector, và cũng không cần: so khớp cosine đã chuyển hết xuống edge (numpy).
 
@@ -36,3 +36,15 @@ CREATE TABLE IF NOT EXISTS access_events (
 
 CREATE INDEX IF NOT EXISTS idx_access_events_user_time ON access_events(user_id, event_time DESC);
 CREATE INDEX IF NOT EXISTS idx_access_events_time ON access_events(event_time DESC);
+
+-- Small registered-member event calendar. Keep disabled schedules for history.
+CREATE TABLE IF NOT EXISTS scheduled_events (
+    schedule_id TEXT PRIMARY KEY,
+    definition TEXT NOT NULL
+);
+-- Additive, UUID-bound receipt for explicit multi-frame enrollment commits.
+CREATE TABLE IF NOT EXISTS capture_receipts (
+  session_id TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(user_id),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S','now'))
+);

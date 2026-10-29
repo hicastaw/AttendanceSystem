@@ -20,6 +20,8 @@ import time
 
 import cv2
 import numpy as np
+from model_contract import LEGACY_CONTRACT, verify_legacy_model
+from pipeline import normalize
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +39,9 @@ def align_face(image, face_row):
 
 
 class FaceRecognizer:
+    contract = LEGACY_CONTRACT
     def __init__(self, model_path):
+        verify_legacy_model(model_path)
         t0 = time.time()
         self._net = cv2.dnn.readNetFromONNX(model_path)
         logger.info("Đã load model face recognition qua cv2.dnn (%s) trong %.2fs", model_path, time.time() - t0)
@@ -49,10 +53,7 @@ class FaceRecognizer:
         self._net.setInput(blob)
         out = self._net.forward()
         embedding = out.flatten().astype(np.float32)
-        norm = np.linalg.norm(embedding)
-        if norm > 0:
-            embedding = embedding / norm
-        return embedding
+        return normalize(embedding).astype(np.float32)
 
 
 class RemoteFaceRecognizer:
@@ -61,23 +62,26 @@ class RemoteFaceRecognizer:
     def __init__(self, ai_service_url, timeout=5):
         import requests
         self._requests = requests
-        self._url = ai_service_url.rstrip("/") + "/ai/face/extract"
+        self._url = ai_service_url.rstrip("/") + "/ai/face/embed-aligned"
         self._timeout = timeout
         logger.info("FaceRecognizer chạy ở chế độ REMOTE, gọi %s", self._url)
 
     def get_embedding(self, aligned_face_bgr):
-        ok, buf = cv2.imencode(".jpg", aligned_face_bgr, [cv2.IMWRITE_JPEG_QUALITY, 90])
+        ok, buf = cv2.imencode(".png", aligned_face_bgr)
         if not ok:
             return None
-        files = {"face_image": ("face.jpg", buf.tobytes(), "image/jpeg")}
+        files = {"face_image": ("face.png", buf.tobytes(), "image/png")}
         try:
-            resp = self._requests.post(self._url, files=files, timeout=self._timeout)
+            resp = self._requests.post(self._url, files=files, timeout=self._timeout, allow_redirects=False)
             resp.raise_for_status()
         except self._requests.RequestException as exc:
             logger.warning("Gọi AI Service (remote embedding) thất bại: %s", exc)
             return None
 
-        data = resp.json()
-        if not data.get("found"):
+        try:
+            data = resp.json()
+            if not data.get("found") or data.get('embedding_contract') != LEGACY_CONTRACT:
+                return None
+            return normalize(data['embedding']).astype(np.float32)
+        except (ValueError, TypeError, KeyError):
             return None
-        return np.array(data["embedding"], dtype=np.float32)

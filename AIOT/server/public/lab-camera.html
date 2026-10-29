@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#120A05">
+  <title>YIRLoDT · Chẩn đoán Camera & Pipeline R50</title>
+  <link rel="stylesheet" href="/assets/yirlodt/yirlodt-tokens.css">
+  <link rel="stylesheet" href="/lab-camera.css">
+  <script src="/lab-camera.js" defer></script>
+</head>
+<body>
+  <div class="diag-shell">
+    <header class="diag-header">
+      <div class="brand-wrap">
+        <a href="/lab-dashboard.html" class="brand-link" title="YIRLoDT Dashboard">
+          <svg class="brand-logo" viewBox="0 0 340 70" width="200" height="42" fill="none" role="img" aria-label="YIRLoDT">
+            <polygon points="22,2 40,12 40,34 22,44 4,34 4,12" stroke="url(#yirCamGrad)" stroke-width="2.5" fill="none" />
+            <circle cx="22" cy="23" r="5.5" fill="#E0523A" />
+            <text x="56" y="36" font-family="'Inter', sans-serif" font-weight="900" font-size="26" fill="url(#yirCamGrad)">
+              YIR<tspan fill="#F1934D">L</tspan><tspan font-size="22" font-weight="800" dy="-2">o</tspan><tspan dy="2" font-weight="900">DT</tspan>
+            </text>
+            <text x="57" y="49" font-family="'DM Mono', monospace" font-size="7" font-weight="600" letter-spacing="0.14em" fill="#A3968E">
+              RESEARCH LAB ON DIGITAL TECH · PTIT
+            </text>
+            <defs>
+              <linearGradient id="yirCamGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#9D3032" />
+                <stop offset="50%" stop-color="#E0523A" />
+                <stop offset="100%" stop-color="#F1934D" />
+              </linearGradient>
+            </defs>
+          </svg>
+        </a>
+      </div>
+
+      <div class="pipeline-spec">
+        <span class="spec-dot"></span>
+        <span>DEMO_R50 · SCRFD-10G + ARCFACE R50</span>
+      </div>
+
+      <nav class="diag-nav">
+        <a href="/r50-capture.html" class="nav-link">Đăng ký mẫu →</a>
+        <a href="/lab-kiosk.html" class="nav-link">Kiosk →</a>
+      </nav>
+    </header>
+
+    <main class="diag-main">
+      <section class="diag-heading">
+        <div class="heading-content">
+          <p class="eyebrow">LIVE MODEL DIAGNOSTICS</p>
+          <h1>Kiểm thử camera & Bounding box</h1>
+          <p class="desc">Chẩn đoán khung hình trực tiếp, nhận diện vị trí khuôn mặt và độ trễ từng chặng suy luận AI.</p>
+        </div>
+      </section>
+
+      <!-- Admin Login Panel -->
+      <section id="login-panel" class="panel login-panel">
+        <div class="panel-header">
+          <h2>Xác thực quyền quản trị viên</h2>
+          <p>Nhập mật khẩu admin hiển thị trong terminal để xem luồng camera chẩn đoán.</p>
+        </div>
+        <form id="login-form" class="login-form">
+          <div class="input-group">
+            <label for="password">Mật khẩu Admin</label>
+            <input id="password" type="password" autocomplete="current-password" placeholder="Nhập mật khẩu admin…" required>
+          </div>
+          <button type="submit" class="primary-btn">Kết nối Camera</button>
+          <p id="error" class="error-msg" role="alert"></p>
+        </form>
+      </section>
+
+      <!-- Active Camera & Diagnostics Panel -->
+      <section id="camera-panel" class="diag-grid" hidden>
+        <!-- Left: Camera Preview Stream -->
+        <div class="preview-panel">
+          <div class="panel-topbar">
+            <div class="topbar-title">
+              <span class="cam-icon">📷</span> CAMERA PREVIEW
+            </div>
+            <span id="camera-status" class="status-badge" data-state="wait">Connecting</span>
+          </div>
+
+          <div class="image-container">
+            <img id="preview" alt="Live webcam preview with detected face boxes">
+            <div id="placeholder" class="preview-placeholder">
+              <div class="loading-spinner"></div>
+              <span>Đang chờ khung hình từ camera owner…</span>
+            </div>
+            <div class="reticle-overlay" aria-hidden="true">
+              <div class="reticle-corner tl"></div>
+              <div class="reticle-corner tr"></div>
+              <div class="reticle-corner bl"></div>
+              <div class="reticle-corner br"></div>
+            </div>
+          </div>
+
+          <p class="privacy-note">
+            <span class="lock-icon">🔒</span> Khung hình phát từ camera owner cục bộ và không được lưu trữ bởi trang này.
+          </p>
+        </div>
+
+        <!-- Right: Pipeline Telemetry Metrics -->
+        <aside class="metrics-panel">
+          <div class="panel-topbar">
+            <div class="topbar-title">PIPELINE TELEMETRY</div>
+            <span class="provider-tag">CPUExecutionProvider</span>
+          </div>
+
+          <div class="pipeline-flow">
+            <span class="flow-step">SCRFD-10G</span>
+            <span class="flow-arrow">→</span>
+            <span class="flow-step">5-point Alignment</span>
+            <span class="flow-arrow">→</span>
+            <span class="flow-step">ArcFace R50</span>
+          </div>
+
+          <div class="metric-card">
+            <span class="metric-label">Số khuôn mặt phát hiện</span>
+            <strong id="faces" class="metric-value">—</strong>
+          </div>
+
+          <div class="metric-card">
+            <span class="metric-label">SCRFD-10G Detection</span>
+            <div class="metric-num-wrap">
+              <strong id="detector" class="metric-value">—</strong>
+              <small>ms</small>
+            </div>
+          </div>
+
+          <div class="metric-card">
+            <span class="metric-label">Five-point Alignment</span>
+            <div class="metric-num-wrap">
+              <strong id="alignment" class="metric-value">—</strong>
+              <small>ms</small>
+            </div>
+          </div>
+
+          <div class="metric-card">
+            <span class="metric-label">ArcFace R50 Feature Extraction</span>
+            <div class="metric-num-wrap">
+              <strong id="recognition" class="metric-value">—</strong>
+              <small>ms</small>
+            </div>
+          </div>
+
+          <div class="metric-card contract-card">
+            <span class="metric-label">Active Embedding Contract</span>
+            <strong id="contract" class="metric-contract">—</strong>
+          </div>
+
+          <div class="diagnostic-summary">
+            <p id="diagnostic-state" role="status" class="summary-text"></p>
+          </div>
+        </aside>
+      </section>
+
+      <footer class="diag-footer">
+        <p>YIRLoDT · Young Innovation Research Laboratory on Digital Technology – PTIT</p>
+        <span class="footer-note">Quy trình cấp phép camera và nạp model là rõ ràng. Hướng dẫn sự cố hiển thị trong terminal launcher.</span>
+      </footer>
+    </main>
+  </div>
+</body>
+</html>

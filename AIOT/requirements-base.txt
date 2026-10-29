@@ -1,0 +1,4 @@
+# Laptop CPython 3.11 baseline shared by mock, CPU service and regression tests.
+-c constraints-laptop-py311.txt
+numpy==2.4.6
+requests==2.34.2
