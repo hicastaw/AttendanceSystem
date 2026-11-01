@@ -64,7 +64,7 @@ SERVER_BASE_URL = os.environ.get("SERVER_BASE_URL", "http://192.168.137.1:3001")
 # AI_SERVICE_URL chỉ dùng khi EMBEDDING_BACKEND=remote (fallback), trỏ tới AI Service
 # FastAPI rút gọn chạy trên laptop (server/ai/main.py, port 8001).
 AI_SERVICE_URL = os.environ.get("AI_SERVICE_URL", "http://192.168.137.1:8001")
-DEVICE_ID = os.environ.get("DEVICE_ID", "ORANGE_PI_PC_01")
+DEVICE_ID = os.environ.get("DEVICE_ID", "RPI5_01")
 EDGE_DEVICE_KEY = os.environ.get("EDGE_DEVICE_KEY", "")
 
 HTTP_TIMEOUT_SECONDS = _get_float("HTTP_TIMEOUT_SECONDS", 3)

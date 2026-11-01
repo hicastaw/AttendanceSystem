@@ -1,41 +1,41 @@
 #!/usr/bin/env bash
-# Chạy TỪ máy phát triển (laptop) để đẩy thư mục edge/ sang Raspberry Pi
-# qua rsync/ssh, rồi cài đặt dependency + systemd service trên đó.
+# Chạy TỪ máy phát triển (laptop) để đẩy thư mục edge/ sang Raspberry Pi qua
+# ssh (tar stream — không cần rsync trên laptop), rồi cài dependency trên đó.
 #
-# Không xoá dữ liệu hiện có trên Pi ngoài ý muốn: không dùng
-# `rsync --delete`, không ghi đè .env nếu đã tồn tại trên thiết bị.
+# Không xoá dữ liệu hiện có trên Pi ngoài ý muốn: chỉ ghi đè file code, không
+# đụng tới .venv/ và .env đã có trên thiết bị.
+#
+# Biến môi trường tuỳ chọn: EDGE_HOST, EDGE_USER, REMOTE_DIR, SSH_KEY.
 set -euo pipefail
 
 EDGE_HOST="${EDGE_HOST:-10.115.62.222}"
 EDGE_USER="${EDGE_USER:-raspberrypi}"
-REMOTE_DIR="${REMOTE_DIR:-/opt/face-attendance-edge}"
+REMOTE_DIR="${REMOTE_DIR:-/home/$EDGE_USER/face-attendance-edge}"
+SSH_OPTS=()
+[[ -n "${SSH_KEY:-}" ]] && SSH_OPTS=(-i "$SSH_KEY" -o IdentitiesOnly=yes)
 
 # EDGE_DIR = thư mục edge/ (gói triển khai tự chứa: code + model/ + scripts/ +
 # systemd/), được đồng bộ nguyên trạng sang REMOTE_DIR trên Pi.
 EDGE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TARGET="$EDGE_USER@$EDGE_HOST"
 
-echo "== [1/4] Tạo thư mục đích trên Pi (không xoá dữ liệu cũ) =="
-ssh "$EDGE_USER@$EDGE_HOST" "sudo mkdir -p '$REMOTE_DIR' && sudo chown \$(id -u):\$(id -g) '$REMOTE_DIR'"
-
-echo
-echo "== [2/4] Đồng bộ code + model (rsync, không --delete) =="
-rsync -avz \
-  --exclude '.venv/' --exclude '__pycache__/' --exclude '.env' \
-  "$EDGE_DIR"/ "$EDGE_USER@$EDGE_HOST:$REMOTE_DIR/"
+echo "== [1/3] Đồng bộ code + model sang $TARGET:$REMOTE_DIR =="
+tar -C "$EDGE_DIR" \
+  --exclude='./.venv' --exclude='__pycache__' --exclude='./.env' \
+  -czf - . \
+  | ssh "${SSH_OPTS[@]}" "$TARGET" "mkdir -p '$REMOTE_DIR' && tar -xzf - -C '$REMOTE_DIR'"
 
 echo
-echo "== [3/4] Cài dependency + virtualenv trên Pi =="
-ssh "$EDGE_USER@$EDGE_HOST" "cd '$REMOTE_DIR' && bash scripts/install_edge.sh"
+echo "== [2/3] Cài dependency + virtualenv trên Pi =="
+ssh "${SSH_OPTS[@]}" "$TARGET" "cd '$REMOTE_DIR' && bash scripts/install_edge.sh"
 
 echo
-echo "== [4/4] Cài đặt systemd service (không tự start, không tự ghi đè .env) =="
-ssh "$EDGE_USER@$EDGE_HOST" \
-  "sudo cp '$REMOTE_DIR/systemd/face-attendance-edge.service' /etc/systemd/system/ && sudo systemctl daemon-reload"
+echo "== [3/3] Tạo .env nếu chưa có (không ghi đè) =="
+ssh "${SSH_OPTS[@]}" "$TARGET" \
+  "cd '$REMOTE_DIR' && if [ -f .env ]; then echo '.env đã có, giữ nguyên.'; else cp .env.example .env && echo 'Đã tạo .env từ .env.example — nhớ sửa SERVER_BASE_URL, EDGE_DEVICE_KEY.'; fi"
 
 echo
-echo "== Hoàn tất. Các bước còn lại (chạy trực tiếp trên Pi) =="
-echo "  cd $REMOTE_DIR"
-echo "  [[ -f .env ]] || cp .env.example .env   # rồi chỉnh sửa giá trị thật (KHÔNG ghi đè nếu đã có)"
-echo "  sudo usermod -aG video \$(whoami)        # để user chạy service truy cập được /dev/video*"
-echo "  sudo systemctl enable --now face-attendance-edge"
+echo "== Hoàn tất. Cài service chạy nền (cần sudo, chạy trực tiếp trên Pi) =="
+echo "  sudo cp $REMOTE_DIR/systemd/face-attendance-edge.service /etc/systemd/system/"
+echo "  sudo systemctl daemon-reload && sudo systemctl enable --now face-attendance-edge"
 echo "  journalctl -u face-attendance-edge -f"

@@ -9,12 +9,12 @@ Type=simple
 # để mở được /dev/video* (sudo usermod -aG video <user>).
 User=raspberrypi
 Group=raspberrypi
-# 3 dòng dưới giả định đã copy nội dung edge/ vào đúng /opt/face-attendance-edge
+# 3 dòng dưới giả định đã copy nội dung edge/ vào đúng /home/raspberrypi/face-attendance-edge
 # (quy ước của scripts/deploy_edge.sh). Nếu copy vào đường dẫn khác, sửa lại
 # cả 3 dòng này cho khớp.
-WorkingDirectory=/opt/face-attendance-edge
-EnvironmentFile=/opt/face-attendance-edge/.env
-ExecStart=/opt/face-attendance-edge/.venv/bin/python3 /opt/face-attendance-edge/main.py
+WorkingDirectory=/home/raspberrypi/face-attendance-edge
+EnvironmentFile=/home/raspberrypi/face-attendance-edge/.env
+ExecStart=/home/raspberrypi/face-attendance-edge/.venv/bin/python3 /home/raspberrypi/face-attendance-edge/main.py
 
 Restart=on-failure
 RestartSec=5
