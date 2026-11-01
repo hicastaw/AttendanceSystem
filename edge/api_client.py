@@ -88,32 +88,36 @@ class ApiClient:
             event = self._queue.get()
             if event is None:
                 continue
+            self.send_event(event)
 
-            sent = False
-            for attempt in range(self.max_retries + 1):
-                try:
-                    resp = self._session.post(
-                        f"{self.base_url}/api/access-events", json=event, timeout=self.timeout,
-                    )
-                    resp.raise_for_status()
-                    self.server_reachable = True
-                    logger.info(
-                        "Đã gửi sự kiện: %s %s (%s), confidence=%.1f%%",
-                        event.get("user_code"), event.get("event_type"),
-                        event.get("event_id"), event.get("confidence", 0),
-                    )
-                    sent = True
-                    break
-                except requests.RequestException as exc:
-                    self.server_reachable = False
-                    logger.warning(
-                        "Gửi sự kiện thất bại (lần %d/%d): %s",
-                        attempt + 1, self.max_retries + 1, exc,
-                    )
-                    time.sleep(0.5)
-
-            if not sent:
-                logger.error(
-                    "Bỏ sự kiện %s sau %d lần thử — server không phản hồi",
-                    event.get("event_id"), self.max_retries + 1,
+    def send_event(self, event):
+        """Gửi 1 sự kiện đồng bộ (có retry). Trả về True nếu server đã nhận."""
+        sent = False
+        for attempt in range(self.max_retries + 1):
+            try:
+                resp = self._session.post(
+                    f"{self.base_url}/api/access-events", json=event, timeout=self.timeout,
                 )
+                resp.raise_for_status()
+                self.server_reachable = True
+                logger.info(
+                    "Đã gửi sự kiện: %s %s (%s), confidence=%.1f%%",
+                    event.get("user_code"), event.get("event_type"),
+                    event.get("event_id"), event.get("confidence", 0),
+                )
+                sent = True
+                break
+            except requests.RequestException as exc:
+                self.server_reachable = False
+                logger.warning(
+                    "Gửi sự kiện thất bại (lần %d/%d): %s",
+                    attempt + 1, self.max_retries + 1, exc,
+                )
+                time.sleep(0.5)
+
+        if not sent:
+            logger.error(
+                "Bỏ sự kiện %s sau %d lần thử — server không phản hồi",
+                event.get("event_id"), self.max_retries + 1,
+            )
+        return sent
