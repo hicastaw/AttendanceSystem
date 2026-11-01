@@ -1,0 +1,5 @@
+# File chạy trên Raspberry Pi phải giữ LF, kể cả khi checkout trên Windows
+*.sh      text eol=lf
+*.service text eol=lf
+*.py      text eol=lf
+.env.example text eol=lf

@@ -1,217 +1,93 @@
-# 🎓 AttendanceSystem – Hệ Thống Điểm Danh Khuôn Mặt
+# AttendanceSystem — Điểm danh ra/vào phòng lab bằng khuôn mặt
 
-Hệ thống điểm danh tự động sử dụng nhận diện khuôn mặt, xây dựng với **React + Vite** (Frontend), **Node.js + Express** (Backend), **Python FastAPI** (AI Service) và **PostgreSQL + pgvector** (Database).
+Camera gắn trên thiết bị biên (Raspberry Pi) tự nhận diện khuôn mặt và ghi nhận
+check-in / check-out. Server trên máy tính lưu dữ liệu và cung cấp trang quản trị.
 
----
-
-
-## ✅ Nâng cấp đã bổ sung trong bản hoàn chỉnh
-
-- Thêm **manual override** cho bản ghi điểm danh trong Dashboard giáo viên.
-- Thêm nút **chốt phiên (submit)** để khóa nghiệp vụ sau khi đã kiểm tra kết quả.
-- Sửa API **global sessions** để tạo phiên hợp lệ theo nhiều học phần, không còn xung đột `section_id NOT NULL`.
-- Hoàn thiện luồng **hủy manual override** để hệ thống tự tính lại trạng thái theo dữ liệu check-in gốc.
-- Kiểm tra lại frontend và build thành công bằng Vite production build.
-
-## 📋 Yêu cầu hệ thống
-
-| Công cụ | Phiên bản khuyến nghị |
-|---|---|
-| [Docker Desktop](https://www.docker.com/products/docker-desktop/) | ≥ 4.x |
-| [Docker Compose](https://docs.docker.com/compose/) | ≥ 2.x (đi kèm Docker Desktop) |
-| Node.js *(chỉ cần nếu chạy local)* | ≥ 20.x |
-| Python *(chỉ cần nếu chạy local)* | ≥ 3.11 |
-
----
-
-## 🚀 Cách 1: Chạy toàn bộ bằng Docker (Khuyên dùng)
-
-> Đây là cách đơn giản nhất. Docker sẽ tự động cài đặt và khởi chạy tất cả dịch vụ.
-
-### Bước 1: Clone repository
-
-```bash
-git clone https://github.com/hicastaw/AttendanceSystem.git
-cd AttendanceSystem
+```
+AttendanceSystem/
+├── edge/                 Chạy trên Raspberry Pi
+│   ├── main.py           Vòng lặp: camera → detect → embedding → so khớp → gửi sự kiện
+│   ├── config.py         Đọc cấu hình từ .env
+│   ├── camera.py, face_detector.py, face_recognizer.py
+│   ├── attendance_service.py   Quyết định check_in/check_out + cooldown
+│   ├── api_client.py     Gửi sự kiện về server (thread nền)
+│   ├── stream_server.py  Stream MJPEG debug + /health (port 5000)
+│   ├── model/            YuNet (detect) + w600k_mbf (embedding 512-D)
+│   ├── scripts/          install / deploy / run / test_camera
+│   ├── systemd/          Service tự chạy khi Pi khởi động
+│   └── .env.example
+├── server/               Chạy trên máy tính
+│   ├── backend/          Node/Express API + SQLite (port 3001), phục vụ luôn bản build frontend
+│   ├── frontend/         Trang quản trị React + Vite (src/pages, src/components, src/api)
+│   └── ai/               FastAPI: validate ảnh + trích embedding khi đăng ký (port 8001)
+└── docs/
+    ├── ARCHITECTURE.md   Kiến trúc đề xuất
+    └── assets/           Sơ đồ kiến trúc
 ```
 
-### Bước 2: Khởi chạy toàn bộ hệ thống
+## Luồng hoạt động
+
+1. Admin tạo người dùng và đăng ký ảnh khuôn mặt trên trang quản trị → AI service
+   trích embedding → lưu vào SQLite.
+2. Edge tải danh sách embedding (`GET /api/face-data`) và trạng thái ra/vào gần nhất
+   (`GET /api/last-state`) khi khởi động, làm mới định kỳ.
+3. Edge nhận diện tại chỗ, đảo trạng thái vào/ra theo từng người (cooldown 60s),
+   gửi `POST /api/access-events`.
+4. Admin xem log ra/vào trên trang quản trị.
+
+Edge xác thực với server bằng header `X-Device-Key`, giá trị phải khớp
+`EDGE_DEVICE_KEY` ở cả `edge/.env` và `server/.env`.
+
+## Chạy server (máy tính)
 
 ```bash
-docker compose up --build
-```
-
-> ⏳ **Lần đầu chạy sẽ mất khoảng 3–5 phút** để tải image và cài đặt dependencies.  
-> Database sẽ tự động được khởi tạo cùng dữ liệu demo (160 sinh viên, 16 học phần, 64 phiên điểm danh).
-
-### Bước 3: Truy cập ứng dụng
-
-| Dịch vụ | URL |
-|---|---|
-| 🌐 Frontend (Giao diện chính) | http://localhost:5173 |
-| 👨‍🏫 Dashboard Giáo viên | http://localhost:5173/teacher |
-| 🔧 Backend API | http://localhost:3001 |
-| 🤖 AI Service | http://localhost:8001 |
-| 🗄️ pgAdmin (Quản lý DB) | http://localhost:5050 |
-
-> **Đăng nhập pgAdmin:**  
-> Email: `admin@example.com` | Mật khẩu: `admin123`
-
-### Dừng hệ thống
-
-```bash
-# Dừng nhưng giữ lại dữ liệu
-docker compose down
-
-# Dừng và xóa toàn bộ dữ liệu (reset sạch)
-docker compose down -v
-```
-
-### Reset và chạy lại từ đầu
-
-```bash
-docker compose down -v
-docker compose up --build
-```
-
----
-
-## 🛠️ Cách 2: Chạy thủ công (Local Development)
-
-Cần mở **4 terminal riêng biệt**, mỗi terminal chạy một dịch vụ.
-
-### Yêu cầu trước khi chạy
-
-- Cài **PostgreSQL 16** + extension **pgvector**
-- Tạo database và chạy các file SQL trong thư mục `backend/database/docker-entrypoint-initdb.d/` theo **thứ tự tên file**
-
-### Terminal 1 – Backend (Node.js)
-
-```bash
-cd backend
+# Backend
+cd server/backend
+cp .env.example .env          # đặt ADMIN_PASSWORD, EDGE_DEVICE_KEY
 npm install
-npm run dev
-```
+npm start                     # API: http://localhost:3001
 
-> Backend chạy tại: http://localhost:3001
-
-### Terminal 2 – Frontend (React + Vite)
-
-```bash
-cd frontend
+# Frontend — khi phát triển (hot reload, proxy /api sang 3001)
+cd server/frontend
 npm install
-npm run dev
-```
+npm run dev                   # http://localhost:5173
 
-> Frontend chạy tại: http://localhost:5173
+# Frontend — khi triển khai: build xong, backend phục vụ luôn tại http://localhost:3001
+npm run build
 
-### Terminal 3 – AI Service (Python FastAPI)
-
-```bash
-cd backend/ai
+# AI service (terminal khác)
+cd server/ai
+python -m venv .venv && .venv/Scripts/activate   # Linux/macOS: source .venv/bin/activate
 pip install -r requirements.txt
 uvicorn main:app --host 0.0.0.0 --port 8001
 ```
 
-> AI Service chạy tại: http://localhost:8001
+## Triển khai edge (Raspberry Pi)
 
-### Biến môi trường cho Backend (tạo file `backend/.env`)
+```bash
+# Từ máy tính (cần ssh + rsync), mặc định đẩy tới raspberrypi@10.115.62.222
+bash edge/scripts/deploy_edge.sh
 
-```env
-PORT=3001
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=attendance_db
-DB_USER=attendance_user
-DB_PASSWORD=attendance_pass
-AI_SERVICE_URL=http://localhost:8001
-UPLOAD_DIR=uploads
+# Trên Pi
+cd /opt/face-attendance-edge
+cp .env.example .env          # sửa SERVER_BASE_URL, EDGE_DEVICE_KEY, CAMERA_DEVICE
+bash scripts/test_camera.sh
+bash scripts/run_edge.sh      # chạy thử thủ công
+sudo systemctl enable --now face-attendance-edge
+journalctl -u face-attendance-edge -f
 ```
 
----
+Debug stream: `http://<IP_PI>:5000/` — health: `http://<IP_PI>:5000/health`.
 
-## 🗂️ Cấu trúc thư mục
+## Kết nối mạng
 
-```
-attsys_work/
-├── docker-compose.yml        # Cấu hình Docker Compose
-├── frontend/                 # React + Vite + TailwindCSS
-│   ├── src/
-│   │   ├── components/       # Các component React
-│   │   └── pages/            # Các trang (Teacher, Student...)
-│   └── Dockerfile
-├── backend/
-│   ├── src/                  # Node.js Express API
-│   ├── ai/                   # Python FastAPI – nhận diện khuôn mặt
-│   │   ├── main.py
-│   │   ├── core/             # Logic nhận diện
-│   │   ├── model/            # Model AI
-│   │   └── requirements.txt
-│   └── database/
-│       └── docker-entrypoint-initdb.d/  # SQL khởi tạo database
-└── README.md
-```
+Pi và máy chạy server cùng nằm trong một mạng ZeroTier, nên Pi cắm vào bất kỳ
+mạng nào có Internet đều kết nối được:
 
----
-
-## 🗄️ Thông tin Database
-
-| Thông số | Giá trị |
+| Thiết bị | IP ZeroTier |
 |---|---|
-| Host | `localhost` (hoặc `postgres` trong Docker) |
-| Port | `5432` |
-| Database | `attendance_db` |
-| Username | `attendance_user` |
-| Password | `attendance_pass` |
+| Raspberry Pi (`attendance-pi`) | `10.115.62.222` |
+| Laptop chạy server | `10.115.62.233` |
 
----
-
-## 📊 Dữ liệu Demo
-
-Hệ thống được tích hợp sẵn bộ dữ liệu demo bao gồm:
-
-- 👥 **160 sinh viên** với hồ sơ đầy đủ
-- 📚 **16 học phần** từ nhiều khoa
-- 📅 **64 phiên điểm danh** ở các trạng thái khác nhau (draft, open, submitted, closed)
-
-> Sau khi chạy, vào **Dashboard Giáo viên** tại http://localhost:5173/teacher để xem dữ liệu demo.
-
----
-
-## ❗ Xử lý lỗi thường gặp
-
-### Lỗi: `container attendance_pg is unhealthy`
-
-Database cần nhiều thời gian để khởi tạo dữ liệu demo. Chạy lại:
-
-```bash
-docker compose up
-```
-
-*(Không cần `--build` lại, Docker sẽ tự nhận biết database đã sẵn sàng.)*
-
-### Lỗi: Port đã bị chiếm dụng
-
-Kiểm tra và dừng ứng dụng đang dùng cổng 5173, 3001, 8001, hoặc 5432.
-
-```bash
-# Windows – kiểm tra port 5173
-netstat -ano | findstr :5173
-```
-
-### Reset toàn bộ dữ liệu
-
-```bash
-docker compose down -v
-docker compose up --build
-```
-
----
-
-## 👥 Thành viên nhóm
-
-| Tên | GitHub |
-|---|---|
-| Trần Trung Hiếu | [@hicastaw](https://github.com/hicastaw) |
-| Lê Quang Vinh | [@vinlee15](https://github.com/vinlee15) |
-| Vietsnowman | [@Vietsnowman](https://github.com/Vietsnowman) |
+`SERVER_BASE_URL` trong `edge/.env` nên trỏ tới IP ZeroTier của máy chạy server,
+ví dụ `http://10.115.62.233:3001`.

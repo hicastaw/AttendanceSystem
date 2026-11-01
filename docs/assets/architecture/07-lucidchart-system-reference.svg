@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#2563eb"/></marker>
+    <marker id="arrowOrange" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#ea7c16"/></marker>
+    <marker id="arrowGreen" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#2d8a3c"/></marker>
+    <style>
+      .group{fill:#f4f8fc;stroke:#17579b;stroke-width:3}.head{fill:#17579b}.title{font:700 27px Arial;fill:#fff}.box{fill:#d8f3f0;stroke:#13877e;stroke-width:3}.store{fill:#fff0dc;stroke:#d97706;stroke-width:3}.server{fill:#e3efff;stroke:#2563a5;stroke-width:3}.ui{fill:#eee7ff;stroke:#6d46b8;stroke-width:3}.health{fill:#e4f5df;stroke:#399343;stroke-width:3}.txt{font:700 22px Arial;fill:#10254a;text-anchor:middle}.small{font:600 17px Arial;fill:#16335f;text-anchor:middle}.line{fill:none;stroke:#2563eb;stroke-width:4;marker-end:url(#arrow)}.syncUp{fill:none;stroke:#2563eb;stroke-width:4;marker-end:url(#arrow)}.syncDown{fill:none;stroke:#ea7c16;stroke-width:4;marker-end:url(#arrowOrange)}.monitor{fill:none;stroke:#2d8a3c;stroke-width:3;stroke-dasharray:10 8;marker-end:url(#arrowGreen)}
+    </style>
+  </defs>
+  <rect width="1600" height="900" fill="#fff"/>
+
+  <!-- Group containers -->
+  <rect class="group" x="25" y="55" width="285" height="790" rx="18"/><rect class="head" x="25" y="55" width="285" height="72" rx="16"/>
+  <text class="title" x="167" y="101" text-anchor="middle">THIẾT BỊ ĐẦU CUỐI</text>
+  <rect class="group" x="335" y="55" width="820" height="790" rx="18"/><rect class="head" x="335" y="55" width="820" height="72" rx="16"/>
+  <text class="title" x="745" y="101" text-anchor="middle">ORANGE PI 5 — EDGE</text>
+  <rect class="group" x="1290" y="55" width="285" height="790" rx="18"/><rect class="head" x="1290" y="55" width="285" height="72" rx="16"/>
+  <text class="title" x="1432" y="101" text-anchor="middle">SERVER TRUNG TÂM</text>
+
+  <!-- Terminal -->
+  <rect class="server" x="72" y="185" width="190" height="100" rx="13"/><text class="txt" x="167" y="245">Người dùng</text>
+  <rect class="box" x="72" y="345" width="190" height="110" rx="13"/><text class="txt" x="167" y="390"><tspan x="167">Camera</tspan><tspan x="167" dy="30">Logitech C920</tspan></text>
+  <rect class="ui" x="72" y="650" width="190" height="105" rx="13"/><text class="txt" x="167" y="712">Màn hình HDMI</text>
+  <path class="line" d="M167 285 V345"/>
+
+  <!-- Main edge pipeline -->
+  <rect class="box" x="375" y="185" width="165" height="110" rx="13"/><text class="txt" x="457" y="230"><tspan x="457">Camera</tspan><tspan x="457" dy="30">Service</tspan></text>
+  <rect class="box" x="575" y="185" width="165" height="110" rx="13"/><text class="txt" x="657" y="230"><tspan x="657">AI</tspan><tspan x="657" dy="30">Inference</tspan></text>
+  <rect class="box" x="775" y="185" width="165" height="110" rx="13"/><text class="txt" x="857" y="250">Matching</text>
+  <rect class="box" x="975" y="185" width="150" height="110" rx="13"/><text class="txt" x="1050" y="230"><tspan x="1050">Attendance</tspan><tspan x="1050" dy="30">Engine</tspan></text>
+  <path class="line" d="M262 400 H320 V240 H375"/><path class="line" d="M540 240 H575"/><path class="line" d="M740 240 H775"/><path class="line" d="M940 240 H975"/>
+
+  <!-- Storage and sync -->
+  <rect class="store" x="555" y="450" width="160" height="105" rx="13"/><text class="txt" x="635" y="490"><tspan x="635">SQLite</tspan><tspan x="635" dy="30">Edge</tspan></text>
+  <rect class="store" x="760" y="450" width="160" height="105" rx="13"/><text class="txt" x="840" y="490"><tspan x="840">Sync</tspan><tspan x="840" dy="30">Queue</tspan></text>
+  <rect class="box" x="965" y="450" width="160" height="105" rx="13"/><text class="txt" x="1045" y="490"><tspan x="1045">Sync</tspan><tspan x="1045" dy="30">Service</tspan></text>
+  <path class="line" d="M1050 295 V380 H635 V450"/><text class="small" x="790" y="370">Lưu sự kiện trước</text>
+  <path class="line" d="M715 502 H760"/><path class="line" d="M920 502 H965"/>
+
+  <!-- Independent display branch -->
+  <path class="line" d="M1050 295 V330 H350 V702 H262"/><text class="small" x="430" y="687">Hiển thị kết quả</text>
+
+  <!-- Health monitor -->
+  <rect class="health" x="650" y="700" width="230" height="78" rx="13"/><text class="txt" x="765" y="748">Health Monitor</text>
+  <path class="monitor" d="M680 700 H457 V295"/><path class="monitor" d="M720 700 H657 V295"/><path class="monitor" d="M810 700 H635 V555"/><path class="monitor" d="M850 700 H1045 V555"/>
+
+  <!-- Server -->
+  <rect class="server" x="1340" y="365" width="185" height="120" rx="13"/><text class="txt" x="1432" y="415"><tspan x="1432">Server</tspan><tspan x="1432" dy="30">API</tspan></text>
+  <rect class="store" x="1340" y="175" width="185" height="105" rx="13"/><text class="txt" x="1432" y="220"><tspan x="1432">Cơ sở</tspan><tspan x="1432" dy="30">dữ liệu</tspan></text>
+  <rect class="ui" x="1340" y="635" width="185" height="105" rx="13"/><text class="txt" x="1432" y="675"><tspan x="1432">Trang</tspan><tspan x="1432" dy="30">quản trị</tspan></text>
+  <path class="line" d="M1432 365 V280"/><path class="line" d="M1432 485 V635"/>
+
+  <!-- Bidirectional sync -->
+  <path class="syncUp" d="M1125 485 H1340"/><text class="small" x="1232" y="472">Sự kiện vào/ra</text>
+  <path class="syncDown" d="M1340 535 H1125"/><text class="small" x="1232" y="565">Người dùng + embedding</text>
+  <text class="small" x="1232" y="425">ĐỒNG BỘ DỮ LIỆU</text>
+</svg>
