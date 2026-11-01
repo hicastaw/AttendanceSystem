@@ -1,0 +1,39 @@
+# Đóng gói phía server (máy tính). Edge chạy trực tiếp trên Raspberry Pi bằng
+# systemd vì cần truy cập camera USB — không nằm trong compose này.
+#
+#   cp server/backend/.env.example server/backend/.env   # đặt ADMIN_PASSWORD, EDGE_DEVICE_KEY
+#   docker compose up -d --build
+#   Trang quản trị: http://localhost:3001
+
+services:
+  web:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: attendance-web
+    restart: unless-stopped
+    env_file: ./server/backend/.env
+    environment:
+      # Ghi đè giá trị trong .env cho môi trường container
+      PORT: 3001
+      AI_SERVICE_URL: http://ai:8001
+      DB_PATH: /app/backend/data/attendance.db
+    ports:
+      - "3001:3001"
+    volumes:
+      - web-data:/app/backend/data
+    depends_on:
+      ai:
+        condition: service_healthy
+
+  ai:
+    build:
+      context: ./server/ai
+    container_name: attendance-ai
+    restart: unless-stopped
+    # Mở 8001 ra ngoài để edge dùng được chế độ EMBEDDING_BACKEND=remote
+    ports:
+      - "8001:8001"
+
+volumes:
+  web-data:

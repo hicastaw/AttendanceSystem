@@ -16,6 +16,7 @@ AttendanceSystem/
 │   ├── scripts/          install / deploy / run / test_camera
 │   ├── systemd/          Service tự chạy khi Pi khởi động
 │   └── .env.example
+├── docker-compose.yml    Đóng gói server: web (3001) + ai (8001)
 ├── server/               Chạy trên máy tính
 │   ├── backend/          Node/Express API + SQLite (port 3001), phục vụ luôn bản build frontend
 │   ├── frontend/         Trang quản trị React + Vite (src/pages, src/components, src/api)
@@ -38,7 +39,26 @@ AttendanceSystem/
 Edge xác thực với server bằng header `X-Device-Key`, giá trị phải khớp
 `EDGE_DEVICE_KEY` ở cả `edge/.env` và `server/.env`.
 
-## Chạy server (máy tính)
+## Chạy server bằng Docker (khuyên dùng)
+
+```bash
+cp server/backend/.env.example server/backend/.env   # đặt ADMIN_PASSWORD, EDGE_DEVICE_KEY
+docker compose up -d --build
+```
+
+| Container | Nội dung | Port |
+|---|---|---|
+| `attendance-web` | Frontend (đã build) + backend Express + SQLite | 3001 |
+| `attendance-ai` | FastAPI trích embedding | 8001 |
+
+- Trang quản trị: http://localhost:3001
+- Dữ liệu SQLite nằm trong Docker volume `web-data`, không mất khi rebuild/restart.
+- Xem log: `docker compose logs -f` — dừng: `docker compose down`
+  (thêm `-v` sẽ **xoá luôn dữ liệu**).
+
+Edge không chạy trong Docker — nó chạy trực tiếp trên Pi bằng systemd vì cần camera USB.
+
+## Chạy server không dùng Docker (khi phát triển)
 
 ```bash
 # Backend
