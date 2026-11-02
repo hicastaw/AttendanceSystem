@@ -17,6 +17,10 @@ CREATE TABLE IF NOT EXISTS face_profiles (
     user_id         INTEGER NOT NULL UNIQUE REFERENCES users(user_id) ON DELETE CASCADE,
     image_path      TEXT,
     embedding       TEXT NOT NULL,   -- JSON.stringify([...512 số...])
+    -- JSON metadata model/preprocessing tạo ra embedding (AI service trả về), vd
+    -- {"recognizer_sha256": "...", "preprocessing": "...", "embedding_dimension": 512}.
+    -- Edge chỉ dùng embedding có pipeline khớp đúng model của nó.
+    pipeline        TEXT,
     quality_score   REAL,
     created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S', 'now', 'localtime')),
     updated_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S', 'now', 'localtime'))

@@ -1,5 +1,5 @@
 import express from 'express';
-import db from '../db.js';
+import db, { getCurrentPipeline } from '../db.js';
 import { requireAdmin, requireDeviceKey } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -92,15 +92,22 @@ router.get('/last-state', requireDeviceKey, (req, res) => {
   res.json({ status: 'success', data });
 });
 
-// GET /api/face-data — embeddings cho thiết bị biên tải về cache cục bộ
+// GET /api/face-data — embeddings cho thiết bị biên tải về cache cục bộ. Chỉ trả
+// embedding thuộc pipeline hiện tại, kèm metadata `pipeline` để edge tự kiểm tra
+// có cùng model/preprocessing với nó không (edge/main.py:load_known_embeddings).
 router.get('/face-data', requireDeviceKey, (req, res) => {
+  const current = getCurrentPipeline();
+  if (!current) {
+    return res.json({ status: 'success', pipeline: null, data: [] });
+  }
+
   const rows = db.prepare(`
     SELECT u.user_code, u.full_name, fp.embedding
     FROM users u
     JOIN face_profiles fp ON fp.user_id = u.user_id
-    WHERE u.status = 'active'
+    WHERE u.status = 'active' AND fp.pipeline = ?
     ORDER BY u.user_code
-  `).all();
+  `).all(current);
 
   const data = rows.map((row) => ({
     user_code: row.user_code,
@@ -108,7 +115,7 @@ router.get('/face-data', requireDeviceKey, (req, res) => {
     embedding: JSON.parse(row.embedding),
   }));
 
-  res.json({ status: 'success', data });
+  res.json({ status: 'success', pipeline: JSON.parse(current), data });
 });
 
 export default router;

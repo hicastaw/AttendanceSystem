@@ -1,7 +1,7 @@
 import express from 'express';
 import axios from 'axios';
 import FormData from 'form-data';
-import db from '../db.js';
+import db, { getCurrentPipeline } from '../db.js';
 import { requireAdmin } from '../middleware/auth.js';
 import { uploadMemory } from '../upload.js';
 
@@ -14,12 +14,22 @@ router.get('/', requireAdmin, (req, res) => {
     SELECT
       u.user_id, u.user_code, u.full_name, u.email, u.status, u.created_at,
       CASE WHEN fp.user_id IS NOT NULL THEN 1 ELSE 0 END AS has_face_profile,
-      fp.updated_at AS face_updated_at
+      fp.updated_at AS face_updated_at,
+      fp.pipeline AS face_pipeline
     FROM users u
     LEFT JOIN face_profiles fp ON fp.user_id = u.user_id
     ORDER BY u.user_code
   `).all();
-  res.json({ status: 'success', data: rows });
+
+  // face_status: none = chưa đăng ký; outdated = embedding tạo bằng model/pipeline
+  // cũ, edge sẽ bỏ qua -> cần đăng ký lại; ok = đang được edge dùng.
+  const current = getCurrentPipeline();
+  const data = rows.map(({ face_pipeline, ...row }) => ({
+    ...row,
+    face_status: !row.has_face_profile ? 'none'
+      : (face_pipeline && face_pipeline === current ? 'ok' : 'outdated'),
+  }));
+  res.json({ status: 'success', data });
 });
 
 // POST /api/users — tạo người dùng mới (chưa có khuôn mặt)
@@ -74,15 +84,23 @@ router.post('/:code/face', requireAdmin, uploadMemory.single('face_image'), asyn
       });
     }
 
+    if (!aiData.pipeline) {
+      return res.status(502).json({
+        status: 'error',
+        message: 'AI Service không trả metadata pipeline — cập nhật AI Service lên bản EdgeFace.',
+      });
+    }
+
     const embeddingJson = JSON.stringify(aiData.embedding);
     db.prepare(`
-      INSERT INTO face_profiles (user_id, embedding, quality_score, updated_at)
-      VALUES (?, ?, ?, strftime('%Y-%m-%dT%H:%M:%S', 'now', 'localtime'))
+      INSERT INTO face_profiles (user_id, embedding, pipeline, quality_score, updated_at)
+      VALUES (?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%S', 'now', 'localtime'))
       ON CONFLICT(user_id) DO UPDATE SET
         embedding = excluded.embedding,
+        pipeline = excluded.pipeline,
         quality_score = excluded.quality_score,
         updated_at = excluded.updated_at
-    `).run(user.user_id, embeddingJson, aiData.sharpness_score || null);
+    `).run(user.user_id, embeddingJson, JSON.stringify(aiData.pipeline), aiData.sharpness_score || null);
 
     res.json({
       status: 'success',

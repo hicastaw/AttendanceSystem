@@ -2,6 +2,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { api, postJson } from '../api/client.js';
 import FaceCapture from '../components/FaceCapture.jsx';
 
+// outdated = embedding tạo bằng model nhận diện cũ, thiết bị biên sẽ bỏ qua.
+const FACE_STATUS = {
+  ok: { label: 'Đã đăng ký', className: 'badge-in' },
+  outdated: { label: 'Cần đăng ký lại', className: 'badge-warn' },
+  none: { label: 'Chưa có', className: 'badge-out' },
+};
+
 export default function Users() {
   const [users, setUsers] = useState([]);
   const [listError, setListError] = useState('');
@@ -117,13 +124,13 @@ export default function Users() {
                   <td>{u.full_name}</td>
                   <td>{u.email || '-'}</td>
                   <td>
-                    {u.has_face_profile
-                      ? <span className="badge badge-in">Đã đăng ký</span>
-                      : <span className="badge badge-out">Chưa có</span>}
+                    <span className={`badge ${FACE_STATUS[u.face_status].className}`}>
+                      {FACE_STATUS[u.face_status].label}
+                    </span>
                   </td>
                   <td>
                     <button type="button" className="small-btn" onClick={() => selectUser(u)}>
-                      {u.has_face_profile ? 'Cập nhật mặt' : 'Đăng ký mặt'}
+                      {u.face_status === 'none' ? 'Đăng ký mặt' : 'Cập nhật mặt'}
                     </button>
                   </td>
                 </tr>

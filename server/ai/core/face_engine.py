@@ -1,15 +1,61 @@
-"""FaceEngine rút gọn cho AI Service chạy trên laptop (PoC lab access).
+"""FaceEngine cho AI Service chạy trên server: detect (YuNet) + align + embedding
+EdgeFace — PHẢI giống hệt pipeline của edge (edge/face_recognizer.py, profile
+"edgeface") để vector đăng ký trên server so khớp được với vector edge tính
+từ camera:
 
-So với backend/ai/core/face_engine.py gốc của project cũ: BỎ 2 model chống
-giả mạo (MiniFASNetV2/V1SE) và check_liveness() — không cần thiết cho việc
-đăng ký khuôn mặt thủ công (người dùng tự chụp/tải ảnh của chính mình), và
-việc bớt tải 2 model onnxruntime giúp AI Service khởi động nhẹ hơn. Phần
-detect/align/embedding giữ nguyên logic gốc.
+- Align: similarity least-squares 5 landmark về template ArcFace 112x112.
+- Preprocess: BGR -> RGB, (x - 127.5) / 127.5, NCHW float32 1x3x112x112.
+- Model: edgeface_xs_gamma_06.onnx (cùng file, cùng SHA256 với edge/model).
+- Output: 512D, L2 normalize.
+
+PIPELINE mô tả hợp đồng này và được lưu kèm mỗi embedding; edge từ chối dữ
+liệu /api/face-data nếu recognizer_sha256/preprocessing không khớp với nó.
 """
+import hashlib
+import os
+
 import cv2
 import numpy as np
 import onnxruntime as ort
-import os
+
+_MODEL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "model")
+DETECTOR_MODEL_PATH = os.path.join(_MODEL_DIR, "face_detection_yunet_2023mar.onnx")
+RECOGNIZER_MODEL_PATH = os.path.join(_MODEL_DIR, "edgeface_xs_gamma_06.onnx")
+
+# Phải trùng chuỗi edge/face_recognizer.py:preprocessing_id() cho profile edgeface.
+PREPROCESSING_ID = "arcface-similarity5-lstsq-112-rgb-mean127.5-scale1/127.5-l2"
+EMBEDDING_DIMENSION = 512
+
+_ARC_FACE_DST = np.array([
+    [38.2946, 51.6963], [73.5318, 51.5014], [56.0252, 71.7366],
+    [41.5493, 92.3655], [70.7299, 92.2041],
+], dtype=np.float32)
+
+
+def _sha256_file(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as source:
+        for block in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def similarity_transform(landmarks, destination=_ARC_FACE_DST):
+    """Least-squares similarity 5 điểm: rotation + uniform scale + translation."""
+    source = np.asarray(landmarks, dtype=np.float64)
+    target = np.asarray(destination, dtype=np.float64)
+    if source.shape != (5, 2) or not np.isfinite(source).all():
+        raise ValueError("Alignment cần 5 landmark hữu hạn")
+    design = np.zeros((10, 4), dtype=np.float64)
+    design[0::2, 0], design[0::2, 1], design[0::2, 2] = source[:, 0], -source[:, 1], 1
+    design[1::2, 0], design[1::2, 1], design[1::2, 3] = source[:, 1], source[:, 0], 1
+    parameters, _, rank, _ = np.linalg.lstsq(design, target.reshape(-1), rcond=None)
+    if rank < 4:
+        raise ValueError("Landmark suy biến; không thể align")
+    a, b, tx, ty = parameters
+    if a * a + b * b <= np.finfo(np.float64).eps:
+        raise ValueError("Alignment scale không hợp lệ")
+    return np.array([[a, -b, tx], [b, a, ty]], dtype=np.float32)
 
 
 class FaceEngine:
@@ -17,35 +63,33 @@ class FaceEngine:
 
     def __new__(cls):
         if cls._instance is None:
-            cls._instance = super(FaceEngine, cls).__new__(cls)
+            instance = super(FaceEngine, cls).__new__(cls)
 
-            base_dir = os.path.dirname(os.path.abspath(__file__))
-            model_path = os.path.join(base_dir, "..", "model")
-
-            cls._instance.detector = cv2.FaceDetectorYN.create(
-                model=os.path.join(model_path, "face_detection_yunet_2023mar.onnx"),
+            instance.detector = cv2.FaceDetectorYN.create(
+                model=DETECTOR_MODEL_PATH,
                 config="",
                 input_size=(640, 640),
                 score_threshold=0.80,
                 nms_threshold=0.3,
             )
 
-            cls._instance.rec_session = ort.InferenceSession(
-                os.path.join(model_path, "w600k_mbf.onnx"),
-                providers=["CPUExecutionProvider"],
+            instance.rec_session = ort.InferenceSession(
+                RECOGNIZER_MODEL_PATH, providers=["CPUExecutionProvider"],
             )
-            cls._instance.rec_input_name = cls._instance.rec_session.get_inputs()[0].name
+            instance.rec_input_name = instance.rec_session.get_inputs()[0].name
+
+            instance.pipeline = {
+                "recognizer_sha256": _sha256_file(RECOGNIZER_MODEL_PATH),
+                "preprocessing": PREPROCESSING_ID,
+                "embedding_dimension": EMBEDDING_DIMENSION,
+            }
+            cls._instance = instance
 
         return cls._instance
 
     def align_face(self, image, face_data):
         landmarks = face_data[4:14].reshape((5, 2)).astype(np.float32)
-        dst = np.array([
-            [38.2946, 51.6963], [73.5318, 51.5014], [56.0252, 71.7366],
-            [41.5493, 92.3655], [70.7299, 92.2041],
-        ], dtype=np.float32)
-        tform = cv2.getAffineTransform(landmarks[:3], dst[:3])
-        return cv2.warpAffine(image, tform, (112, 112))
+        return cv2.warpAffine(image, similarity_transform(landmarks), (112, 112))
 
     def calculate_shapeness(self, image):
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -59,8 +103,10 @@ class FaceEngine:
             aligned_face, 1.0 / 127.5, (112, 112), (127.5, 127.5, 127.5), swapRB=True
         )
         net_out = self.rec_session.run(None, {self.rec_input_name: blob})[0]
-        embedding = net_out.flatten()
+        embedding = np.asarray(net_out, dtype=np.float32).reshape(-1)
+        if embedding.shape != (EMBEDDING_DIMENSION,) or not np.isfinite(embedding).all():
+            raise ValueError("Model phải trả embedding 512 chiều hữu hạn")
         norm = np.linalg.norm(embedding)
-        if norm > 0:
-            embedding = embedding / norm
-        return embedding
+        if norm <= 0:
+            raise ValueError("Embedding có norm không hợp lệ")
+        return embedding / norm

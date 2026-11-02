@@ -1,7 +1,8 @@
-"""AI Service rút gọn — chạy trên laptop, chỉ phục vụ:
-  - /ai/face/validate : validate + trích embedding khi ĐĂNG KÝ khuôn mặt (trang quản lý)
-  - /ai/face/extract  : dự phòng cho edge (EMBEDDING_BACKEND=remote) nếu cv2.dnn
-                        không chạy được model trên Orange Pi
+"""AI Service rút gọn — chạy trên server, chỉ phục vụ:
+  - /ai/face/validate : validate + trích embedding EdgeFace khi ĐĂNG KÝ khuôn mặt
+                        (trang quản lý), trả kèm metadata pipeline
+  - /ai/face/extract  : trích embedding từ ảnh (dùng chung pipeline EdgeFace)
+  - /ai/pipeline      : metadata pipeline hiện tại (model sha256, preprocessing)
 
 Không có endpoint nhận diện realtime nào khác vì việc so khớp/quyết định
 check_in-check_out giờ nằm hoàn toàn ở thiết bị biên.
@@ -52,6 +53,11 @@ def health_check():
     return {"status": "ok", "service": "AIOT Lab Access - AI Service"}
 
 
+@app.get("/ai/pipeline")
+def get_pipeline():
+    return engine.pipeline
+
+
 @app.post("/ai/face/validate")
 def validate_face(face_image: UploadFile = File(...)):
     validate_upload_file(face_image)
@@ -89,6 +95,7 @@ def validate_face(face_image: UploadFile = File(...)):
     return {
         "is_valid": True,
         "embedding": embedding.tolist(),
+        "pipeline": engine.pipeline,
         "sharpness_score": round(float(sharpness), 2),
         "message": "Ảnh hợp lệ.",
         "error_code": None,
@@ -121,5 +128,6 @@ def extract_face(face_image: UploadFile = File(...)):
     return {
         "found": True,
         "embedding": embedding.tolist(),
+        "pipeline": engine.pipeline,
         "confidence": round(float(face[-1]), 4),
     }
