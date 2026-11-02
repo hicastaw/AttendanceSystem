@@ -5,16 +5,20 @@ check-in / check-out. Server trên máy tính lưu dữ liệu và cung cấp tr
 
 ```
 AttendanceSystem/
-├── edge/                 Chạy trên Raspberry Pi
+├── edge/                 Chạy trên Raspberry Pi 5 + Camera Module 3
 │   ├── main.py           Vòng lặp: camera → detect → embedding → so khớp → gửi sự kiện
 │   ├── config.py         Đọc cấu hình từ .env
-│   ├── camera.py, face_detector.py, face_recognizer.py
+│   ├── camera.py         Camera CSI (rpicam-vid) hoặc USB (V4L2)
+│   ├── face_detector.py, face_recognizer.py   YuNet + EdgeFace (ONNX Runtime)
 │   ├── attendance_service.py   Quyết định check_in/check_out + cooldown
 │   ├── api_client.py     Gửi sự kiện về server (thread nền)
-│   ├── stream_server.py  Stream MJPEG debug + /health (port 5000)
-│   ├── model/            YuNet (detect) + w600k_mbf (embedding 512-D)
-│   ├── scripts/          install / deploy / run / test_camera
+│   ├── stream_server.py  Stream MJPEG + /kiosk + /health (port 5000)
+│   ├── recognize_image.py   Nhận diện từ file ảnh (thử nghiệm không cần camera)
+│   ├── enroll_faces.py, local_enrollment.py   Kho khuôn mặt cục bộ cho --live-test
+│   ├── model/            face_detection_yunet_2023mar + edgeface_xs_gamma_06
+│   ├── scripts/          install / deploy / run / test_camera / kiosk
 │   ├── systemd/          Service tự chạy khi Pi khởi động
+│   ├── tests/            unittest
 │   └── .env.example
 ├── docker-compose.yml    Đóng gói server: web (3001) + ai (8001)
 ├── server/               Chạy trên máy tính
@@ -37,7 +41,13 @@ AttendanceSystem/
 4. Admin xem log ra/vào trên trang quản trị.
 
 Edge xác thực với server bằng header `X-Device-Key`, giá trị phải khớp
-`EDGE_DEVICE_KEY` ở cả `edge/.env` và `server/.env`.
+`EDGE_DEVICE_KEY` ở cả `edge/.env` và `server/backend/.env`.
+
+**Model nhận diện phải giống nhau ở hai phía.** Server (`server/ai`) và edge cùng
+dùng `edgeface_xs_gamma_06.onnx` với cùng cách align/tiền xử lý. Mỗi embedding được
+lưu kèm `pipeline` (sha256 model + preprocessing); `/api/face-data` chỉ trả embedding
+đúng pipeline hiện tại và edge từ chối dữ liệu không khớp. Khi đổi model, phải đổi
+ở cả hai nơi rồi đăng ký lại khuôn mặt (trang quản trị hiện "Cần đăng ký lại").
 
 ## Chạy server bằng Docker (khuyên dùng)
 
@@ -56,7 +66,7 @@ docker compose up -d --build
 - Xem log: `docker compose logs -f` — dừng: `docker compose down`
   (thêm `-v` sẽ **xoá luôn dữ liệu**).
 
-Edge không chạy trong Docker — nó chạy trực tiếp trên Pi bằng systemd vì cần camera USB.
+Edge không chạy trong Docker — nó chạy trực tiếp trên Pi bằng systemd vì cần camera.
 
 ## Chạy server không dùng Docker (khi phát triển)
 
@@ -85,19 +95,47 @@ uvicorn main:app --host 0.0.0.0 --port 8001
 ## Triển khai edge (Raspberry Pi)
 
 ```bash
-# Từ máy tính (cần ssh + rsync), mặc định đẩy tới raspberrypi@10.115.62.222
+# Từ máy tính (Git Bash): đẩy edge/ tới raspberrypi@10.115.62.222:~/face-attendance-edge,
+# cài .venv (pip, không cần sudo) và tạo .env nếu chưa có
 bash edge/scripts/deploy_edge.sh
 
 # Trên Pi
-cd /opt/face-attendance-edge
-cp .env.example .env          # sửa SERVER_BASE_URL, EDGE_DEVICE_KEY, CAMERA_DEVICE
+cd ~/face-attendance-edge
+nano .env                     # SERVER_BASE_URL, EDGE_DEVICE_KEY, CAMERA_BACKEND=rpicam
 bash scripts/test_camera.sh
-bash scripts/run_edge.sh      # chạy thử thủ công
-sudo systemctl enable --now face-attendance-edge
+.venv/bin/python3 main.py --live-test   # thử camera + nhận diện, KHÔNG ghi điểm danh (port 8080)
+.venv/bin/python3 main.py               # chạy điểm danh thật (port 5000), Ctrl+C để dừng
+
+# Chạy nền khi Pi khởi động
+sudo cp systemd/face-attendance-edge.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now face-attendance-edge
 journalctl -u face-attendance-edge -f
 ```
 
-Debug stream: `http://<IP_PI>:5000/` — health: `http://<IP_PI>:5000/health`.
+| Địa chỉ trên Pi (port 5000) | Nội dung |
+|---|---|
+| `/` | Trang debug: video + chỉ số + kết quả nhận diện |
+| `/kiosk` | Giao diện màn hình kiosk: video toàn màn hình + "Xin chào / Tạm biệt" |
+| `/health` | JSON trạng thái camera, model, server |
+
+Thử nhận diện bằng ảnh (không cần camera): `.venv/bin/python3 recognize_image.py <ảnh|thư mục>`
+— thêm `--dry-run` để không gửi sự kiện.
+
+### Màn hình kiosk
+
+Màn hình HDMI gắn với Pi hiển thị trang `/kiosk` bằng Chromium toàn màn hình:
+
+```bash
+sudo apt install -y chromium                         # một lần
+~/face-attendance-edge/scripts/kiosk.sh &            # mở ngay (chạy được từ SSH)
+
+# Tự mở mỗi khi Pi khởi động vào desktop
+echo '/home/raspberrypi/face-attendance-edge/scripts/kiosk.sh >/tmp/kiosk.log 2>&1 &' >> ~/.config/labwc/autostart
+```
+
+Thoát kiosk: `Alt+F4`, hoặc `pkill -f attendance-kiosk` qua SSH. Xem màn hình Pi từ
+laptop: bật VNC (`sudo apt install -y wayvnc && sudo raspi-config nonint do_vnc 0`)
+rồi dùng RealVNC Viewer kết nối `10.115.62.222`.
 
 ## Kết nối mạng
 
@@ -111,3 +149,12 @@ mạng nào có Internet đều kết nối được:
 
 `SERVER_BASE_URL` trong `edge/.env` nên trỏ tới IP ZeroTier của máy chạy server,
 ví dụ `http://10.115.62.233:3001`.
+
+Máy chạy server phải cho phép kết nối vào cổng 3001/8001 từ mạng ZeroTier. Trên
+Windows chạy Docker Desktop với WSL `networkingMode=mirrored`, mở bằng PowerShell
+(Run as administrator):
+
+```powershell
+New-NetFirewallHyperVRule -Name AttendanceSystem -DisplayName "AttendanceSystem web+ai" -Direction Inbound -VMCreatorId '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -Protocol TCP -LocalPorts 3001,8001 -RemoteAddresses 10.115.62.0/24 -Action Allow
+New-NetFirewallRule -DisplayName "AttendanceSystem web+ai" -Direction Inbound -Protocol TCP -LocalPort 3001,8001 -RemoteAddress 10.115.62.0/24 -Action Allow -Profile Any
+```
