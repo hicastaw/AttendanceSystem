@@ -22,6 +22,7 @@ class ApiClient:
         self.timeout = timeout
         self.max_retries = max_retries
         self.server_reachable = False
+        self.face_data_pipeline = None
 
         self._session = requests.Session()
         headers = {"Content-Type": "application/json"}
@@ -60,11 +61,14 @@ class ApiClient:
         return self.server_reachable
 
     def get_face_data(self):
+        self.face_data_pipeline = None
         try:
             resp = self._session.get(f"{self.base_url}/api/face-data", timeout=self.timeout * 3)
             resp.raise_for_status()
             self.server_reachable = True
-            return resp.json().get("data", [])
+            payload = resp.json()
+            self.face_data_pipeline = payload.get("pipeline")
+            return payload.get("data", [])
         except requests.RequestException as exc:
             self.server_reachable = False
             logger.warning("Không tải được face-data từ server: %s", exc)

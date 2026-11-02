@@ -46,6 +46,8 @@ CAMERA_WIDTH = _get_int("CAMERA_WIDTH", 640)
 CAMERA_HEIGHT = _get_int("CAMERA_HEIGHT", 480)
 CAMERA_FPS = _get_int("CAMERA_FPS", 10)
 CAMERA_FOURCC = os.environ.get("CAMERA_FOURCC", "MJPG")
+CAMERA_BACKEND = os.environ.get("CAMERA_BACKEND", "v4l2").strip().lower()
+CAMERA_INDEX = _get_int("CAMERA_INDEX", 0)
 
 # --- Xử lý AI ---
 PROCESS_EVERY_N_FRAMES = max(1, _get_int("PROCESS_EVERY_N_FRAMES", 3))
@@ -76,12 +78,17 @@ FACE_DATA_REFRESH_SECONDS = _get_int("FACE_DATA_REFRESH_SECONDS", 300)
 ATTENDANCE_COOLDOWN_SECONDS = _get_int("ATTENDANCE_COOLDOWN_SECONDS", 60)
 SIMILARITY_THRESHOLD = _get_float("SIMILARITY_THRESHOLD", 0.60)
 
-# "cv2dnn" (mặc định, khuyến nghị thử trước — dùng nguyên model w600k_mbf.onnx qua
-# module cv2.dnn, không cần onnxruntime) hoặc "remote" (fallback: gửi ảnh mặt đã
-# align sang AI Service trên laptop, giữ nguyên onnxruntime ở đó).
-EMBEDDING_BACKEND = os.environ.get("EMBEDDING_BACKEND", "cv2dnn").strip().lower()
+# Local runtime: onnxruntime (EdgeFace) hoặc cv2dnn (model legacy).
+# remote chỉ dùng cho legacy ArcFace khi server hỗ trợ đúng model.
+EMBEDDING_BACKEND = os.environ.get("EMBEDDING_BACKEND", "onnxruntime").strip().lower()
+RECOGNIZER_THREADS = max(1, _get_int("RECOGNIZER_THREADS", 2))
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 
 DETECTOR_MODEL_PATH = os.path.join(MODEL_DIR, "face_detection_yunet_2023mar.onnx")
-RECOGNIZER_MODEL_PATH = os.path.join(MODEL_DIR, "w600k_mbf.onnx")
+RECOGNIZER_MODEL_PATH = os.environ.get(
+    "RECOGNIZER_MODEL_PATH", os.path.join(MODEL_DIR, "edgeface_xs_gamma_06.onnx"),
+)
+RECOGNIZER_PROFILE = os.environ.get(
+    "RECOGNIZER_PROFILE", "edgeface" if os.path.basename(RECOGNIZER_MODEL_PATH).startswith("edgeface") else "arcface",
+).strip().lower()

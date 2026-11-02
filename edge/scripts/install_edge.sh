@@ -36,21 +36,23 @@ echo "== [3/4] Cài dependency Python (requirements.txt) =="
 echo
 echo "== [4/4] Kiểm tra OpenCV + model =="
 ./.venv/bin/python3 - <<'PYEOF'
-import os
 import cv2
+import numpy as np
+import config
+from face_recognizer import FaceRecognizer
 
 print("OpenCV version:", cv2.__version__)
 print("Có cv2.FaceDetectorYN:", hasattr(cv2, "FaceDetectorYN"))
-for name in ("face_detection_yunet_2023mar.onnx", "w600k_mbf.onnx"):
-    path = os.path.join("model", name)
-    print(f"Model {name}:", "OK" if os.path.exists(path) else "THIẾU")
-net = cv2.dnn.readNetFromONNX(os.path.join("model", "w600k_mbf.onnx"))
-print("cv2.dnn load w600k_mbf.onnx: OK")
+print("Recognition model:", config.RECOGNIZER_MODEL_PATH)
+recognizer = FaceRecognizer(config.RECOGNIZER_MODEL_PATH)
+embedding = recognizer.get_embedding(np.zeros((112, 112, 3), dtype=np.uint8))
+print("Recognition runtime:", recognizer.runtime, "embedding:", embedding.shape)
+
 PYEOF
 
 echo
 echo "Tiếp theo:"
 echo "  1. cp .env.example .env   # rồi chỉnh SERVER_BASE_URL, EDGE_DEVICE_KEY, CAMERA_DEVICE..."
-echo "  2. .venv/bin/python3 recognize_image.py <ảnh|thư mục>   # thử nhận diện từ ảnh"
+echo "  2. .venv/bin/python3 enroll_faces.py --rebuild-existing enroll_image   # nếu đổi model và đã có kho"
 echo "  3. bash scripts/test_camera.sh    # khi đã cắm camera"
-echo "  4. bash scripts/run_edge.sh        # chạy thử thủ công với camera"
+echo "  4. .venv/bin/python3 main.py --live-test   # camera/AI không ghi điểm danh"
