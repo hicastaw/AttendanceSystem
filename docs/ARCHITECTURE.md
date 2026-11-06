@@ -6,7 +6,7 @@ Tài liệu này mô tả kiến trúc mục tiêu của hệ thống điểm da
 
 Phần lựa chọn, đánh giá và huấn luyện mô hình AI được trình bày trong tài liệu riêng. Trong tài liệu này, các mô hình chỉ được xem như những thành phần của pipeline suy luận.
 
-> **Phạm vi triển khai:** một phòng lab, một cửa, một camera Logitech C920 và khoảng 20–30 người dùng.
+> **Phạm vi triển khai:** một phòng lab, một cửa, một camera Raspberry Pi Camera Module 3 và khoảng 20–30 người dùng.
 
 ### 1.1. Mục tiêu chính
 
@@ -24,22 +24,22 @@ Phần lựa chọn, đánh giá và huấn luyện mô hình AI được trình
 
 Hệ thống được thiết kế theo hai nguyên tắc:
 
-- **Edge-first:** Orange Pi tự thực hiện toàn bộ quá trình nhận diện và quyết định sự kiện.
+- **Edge-first:** Raspberry Pi tự thực hiện toàn bộ quá trình nhận diện và quyết định sự kiện.
 - **Offline-first:** dữ liệu được ghi cục bộ trước, sau đó mới đồng bộ với server.
 
 Kiến trúc gồm ba khối chính:
 
-1. **Thiết bị đầu cuối:** camera Logitech C920 và màn hình HDMI.
-2. **Thiết bị biên:** Orange Pi 5 xử lý camera, AI, nghiệp vụ, giao diện và lưu trữ offline.
+1. **Thiết bị đầu cuối:** Camera Module 3 (cổng CSI) và màn hình HDMI 1024×600.
+2. **Thiết bị biên:** Raspberry Pi 5 xử lý camera, AI, nghiệp vụ, giao diện và lưu trữ offline.
 3. **Server trung tâm:** quản lý người dùng, dữ liệu khuôn mặt, lịch sử sự kiện và trạng thái thiết bị.
 
 <!-- IMAGE_PLACEHOLDER: system-overview -->
-> **Ảnh cần bổ sung:** Sơ đồ tổng quan Camera → Orange Pi 5 → Server, trong đó màn hình và SQLite nằm tại edge.
+> **Ảnh cần bổ sung:** Sơ đồ tổng quan Camera → Raspberry Pi 5 → Server, trong đó màn hình và SQLite nằm tại edge.
 
 ### 2.1. Luồng dữ liệu tổng quát
 
 ```text
-Logitech C920
+Camera Module 3 (CSI)
     ↓
 Camera Service
     ↓
@@ -55,11 +55,32 @@ Attendance Engine
 
 Server không tham gia vào quyết định nhận diện thời gian thực. Nếu server không khả dụng, các khối từ camera đến Attendance Engine vẫn tiếp tục hoạt động.
 
+### 2.2. Cấu hình phần cứng
+
+| Thành phần | Thiết bị | Ghi chú |
+|---|---|---|
+| Thiết bị biên | Raspberry Pi 5 Model B, 8 GB RAM | CPU Arm Cortex-A76 4 nhân 2,4 GHz, không có NPU |
+| Hệ điều hành | Raspberry Pi OS 64-bit (Debian 13 Trixie) | Desktop labwc/Wayland cho kiosk |
+| Camera | Raspberry Pi Camera Module 3 (cảm biến Sony IMX708) | Cắm cổng CSI, đọc qua `rpicam-vid` (libcamera) |
+| Màn hình | Màn hình HDMI 1024×600 | Hiển thị Kiosk UI bằng Chromium toàn màn hình |
+| Lưu trữ | microSD 32 GB | Khuyến nghị chuyển sang SSD NVMe qua M.2 HAT+ khi chạy 24/7 |
+| Kết nối | Ethernet + ZeroTier | Pi và server chung mạng riêng ảo, IP cố định dù đổi mạng vật lý |
+| Server | Máy tính riêng chạy Docker | Container `web` (backend + trang quản trị + SQLite) và `ai` (trích embedding) |
+
+Số liệu đo trên thiết bị (Camera 640×480 @ 10 FPS, AI chạy mỗi 3 frame):
+
+| Chỉ số | Giá trị |
+|---|---|
+| Tốc độ camera / stream | ~10 FPS |
+| Tần suất chạy AI | ~3,3 lần/giây |
+| Phát hiện khuôn mặt (YuNet, cảnh không có mặt) | ~7–8 ms |
+| Phát hiện + căn chỉnh + embedding + đối sánh (1 khuôn mặt) | ~25 ms |
+
 ---
 
 ## 3. Kiến trúc thiết bị biên
 
-Orange Pi 5 là thiết bị xử lý trung tâm tại cửa phòng lab. Các chức năng được tách thành những thành phần độc lập để dễ kiểm thử, giám sát và khởi động lại khi xảy ra lỗi.
+Raspberry Pi 5 là thiết bị xử lý trung tâm tại cửa phòng lab. Các chức năng được tách thành những thành phần độc lập để dễ kiểm thử, giám sát và khởi động lại khi xảy ra lỗi.
 
 | Thành phần | Trách nhiệm |
 |---|---|
@@ -72,39 +93,42 @@ Orange Pi 5 là thiết bị xử lý trung tâm tại cửa phòng lab. Các ch
 | Local Repository | Quản lý SQLite, embedding cache và hàng đợi sự kiện |
 | Sync Service | Đồng bộ dữ liệu hai chiều với server |
 | Kiosk UI | Hiển thị hướng dẫn, kết quả và trạng thái hệ thống |
-| Health Monitor | Giám sát camera, NPU, nhiệt độ, mạng và dung lượng |
+| Health Monitor | Giám sát camera, AI runtime, nhiệt độ, mạng và dung lượng |
 
 <!-- IMAGE_PLACEHOLDER: edge-components -->
-> **Ảnh cần bổ sung:** Sơ đồ các service chạy trong Orange Pi và quan hệ giữa chúng.
+> **Ảnh cần bổ sung:** Sơ đồ các service chạy trong Raspberry Pi và quan hệ giữa chúng.
 
 ### 3.1. Phân bổ tài nguyên xử lý
 
-- **NPU:** chạy các mô hình phát hiện và trích xuất embedding đã chuyển sang RKNN.
-- **CPU:** đọc camera, tiền/hậu xử lý, căn chỉnh hình học, đối sánh vector và nghiệp vụ.
-- **GPU/VPU:** hỗ trợ hiển thị giao diện và giải mã video khi phù hợp.
-- **RAM:** chứa model runtime, frame buffer, embedding của người dùng và trạng thái ứng dụng.
-- **NVMe:** chứa hệ điều hành, SQLite, log và dữ liệu đang chờ đồng bộ.
+Raspberry Pi 5 không có NPU, nên toàn bộ suy luận AI chạy trên CPU:
+
+- **CPU (Cortex-A76 × 4):** chạy detector YuNet (OpenCV) và recognizer EdgeFace (ONNX Runtime CPU, 2 luồng), tiền/hậu xử lý, căn chỉnh hình học, đối sánh vector và nghiệp vụ.
+- **ISP của Raspberry Pi:** xử lý ảnh từ cảm biến IMX708 và nén MJPEG trước khi đưa vào pipeline.
+- **GPU VideoCore VII:** hiển thị Kiosk UI (Chromium trên Wayland).
+- **RAM 8 GB:** chứa model runtime, frame buffer, embedding của người dùng và trạng thái ứng dụng.
+- **Lưu trữ:** hiện là microSD, chứa hệ điều hành, SQLite, log và dữ liệu đang chờ đồng bộ; khuyến nghị SSD NVMe khi vận hành lâu dài.
+- **Tùy chọn tăng tốc:** có thể gắn bộ tăng tốc AI rời (ví dụ Raspberry Pi AI HAT+) nếu cần nhiều luồng camera hoặc model nặng hơn; interface đầu ra của từng tầng giữ nguyên.
 
 ---
 
 ## 4. Pipeline xử lý nhận diện
 
-Pipeline nhận diện được thực hiện hoàn toàn tại Orange Pi.
+Pipeline nhận diện được thực hiện hoàn toàn tại Raspberry Pi.
 
 <!-- IMAGE_PLACEHOLDER: recognition-pipeline -->
 > **Ảnh cần bổ sung:** Infographic pipeline từ camera đến kết quả điểm danh.
 
 ### 4.1. Bước 1 — Thu nhận hình ảnh
 
-Camera Logitech C920 được truy cập thông qua V4L2.
+Camera Module 3 được đọc qua `rpicam-vid` (libcamera). Một tiến trình duy nhất giữ camera, xuất MJPEG qua pipe trong RAM; Camera Service chỉ giữ frame mới nhất. Webcam USB vẫn được hỗ trợ qua V4L2 (`CAMERA_BACKEND=v4l2`).
 
-Cấu hình khởi điểm đề xuất:
+Cấu hình hiện tại:
 
-- Capture ở độ phân giải `1280 × 720`.
-- Tốc độ camera tối đa 30 FPS.
-- Định dạng MJPEG để giảm tải truyền dữ liệu qua USB.
-- Giao diện có thể hiển thị 20–30 FPS.
-- Pipeline AI chỉ cần xử lý khoảng 10–15 FPS cho bài toán chấm công.
+- Capture ở độ phân giải `640 × 480`, 10 FPS.
+- Detector chạy trên ảnh thu nhỏ còn chiều rộng 320 px.
+- Pipeline AI xử lý mỗi 3 frame (~3,3 lần/giây), đủ cho bài toán chấm công.
+- Kiosk UI hiển thị luồng 10 FPS.
+- Có thể tăng lên `1280 × 720` và 15–30 FPS nếu cần nhận diện ở khoảng cách xa hơn, đổi lại tăng tải CPU.
 
 Camera Service phải có khả năng phát hiện lỗi đọc frame, giải phóng camera và tự kết nối lại mà không cần khởi động toàn bộ thiết bị.
 
@@ -116,7 +140,7 @@ Detector nhận frame đã resize và trả về:
 - Điểm tin cậy phát hiện.
 - Năm landmark: hai mắt, mũi và hai khóe miệng.
 
-Trong kiến trúc mục tiêu, detector dự kiến chạy trên NPU. Tên model và cấu hình lượng tử hóa có thể thay đổi mà không ảnh hưởng tới các tầng phía sau nếu giữ nguyên interface đầu ra.
+Detector hiện là YuNet chạy trên CPU. Tên model và cấu hình lượng tử hóa có thể thay đổi mà không ảnh hưởng tới các tầng phía sau nếu giữ nguyên interface đầu ra.
 
 ### 4.3. Bước 3 — Kiểm tra chất lượng
 
@@ -226,7 +250,7 @@ Tạo 5–10 embedding
     ↓
 Lưu trên server và tăng phiên bản dữ liệu
     ↓
-Orange Pi tải bản cập nhật về SQLite
+Raspberry Pi tải bản cập nhật về SQLite
 ```
 
 Để dữ liệu gần với môi trường vận hành, nên ưu tiên đăng ký bằng chính camera và vị trí lắp đặt của hệ thống.
@@ -235,7 +259,7 @@ Orange Pi tải bản cập nhật về SQLite
 
 ## 6. Cơ chế lưu trữ cục bộ
 
-SQLite trên Orange Pi là nguồn dữ liệu vận hành khi thiết bị offline.
+SQLite trên Raspberry Pi là nguồn dữ liệu vận hành khi thiết bị offline.
 
 ### 6.1. Các nhóm dữ liệu chính
 
@@ -388,9 +412,9 @@ Với một camera đơn và không có cảm biến bổ sung, hệ thống kh�
 
 ### 11.1. Phần cứng
 
-- Dùng NVMe thay vì chỉ dùng microSD.
-- Trang bị tản nhiệt chủ động và quạt.
-- Sử dụng nguồn ổn định, đúng công suất.
+- Chuyển từ microSD sang SSD NVMe (qua M.2 HAT+) để tránh hỏng thẻ khi ghi SQLite/log liên tục.
+- Trang bị tản nhiệt chủ động (Raspberry Pi Active Cooler hoặc vỏ có quạt).
+- Sử dụng nguồn USB-C 27 W (5 V / 5 A) chính hãng cho Raspberry Pi 5.
 - Bố trí vỏ thông thoáng và có khả năng vệ sinh quạt.
 - Ưu tiên Ethernet; nếu dùng Wi-Fi thì sử dụng adapter tương thích Linux ổn định.
 
@@ -410,11 +434,11 @@ Với một camera đơn và không có cảm biến bổ sung, hệ thống kh�
 Health Monitor nên cung cấp trạng thái:
 
 - Camera có đang đọc được frame không.
-- Model và NPU runtime có hoạt động không.
+- Model và AI runtime (ONNX Runtime) có hoạt động không.
 - SQLite có thể đọc/ghi không.
 - Server có kết nối được không.
 - Số sự kiện đang chờ đồng bộ.
-- Nhiệt độ CPU/NPU.
+- Nhiệt độ CPU và trạng thái giảm xung (throttling).
 - RAM và dung lượng ổ đĩa còn lại.
 - Thời điểm nhận diện và đồng bộ thành công gần nhất.
 
@@ -442,7 +466,7 @@ Với vài trăm người, đối sánh cosine trực tiếp vẫn có thể đ�
 
 ### 13.2. Mở rộng nhiều phòng hoặc nhiều cửa
 
-- Mỗi Orange Pi có `device_id` riêng.
+- Mỗi Raspberry Pi có `device_id` riêng.
 - Server quản lý phiên bản dữ liệu theo thiết bị hoặc địa điểm.
 - Sự kiện luôn chứa thông tin thiết bị và cửa.
 - Database server có thể chuyển từ SQLite sang PostgreSQL.
@@ -454,14 +478,14 @@ Với vài trăm người, đối sánh cosine trực tiếp vẫn có thể đ�
 
 | Hạng mục | PoC hiện tại | Kiến trúc mục tiêu |
 |---|---|---|
-| AI runtime | OpenCV DNN trên CPU | RKNN Runtime trên NPU |
+| AI runtime | ONNX Runtime CPU (YuNet + EdgeFace) | ONNX Runtime CPU; bộ tăng tốc AI rời nếu cần |
 | Số mẫu mỗi người | Một embedding | 5–10 embedding |
 | Xác nhận | Kết quả từng frame | Đồng thuận 3/5 frame |
 | Lưu sự kiện khi mất mạng | Có thể bị bỏ | SQLite queue bền vững |
 | Đồng bộ | Gửi trực tiếp | Retry có trạng thái và chống trùng |
 | Giao diện edge | MJPEG debug | Kiosk UI trên màn hình HDMI |
-| Health check | Cơ bản | Camera, NPU, DB, nhiệt độ và sync queue |
-| Lưu trữ edge | Phụ thuộc môi trường | NVMe, WAL và log rotation |
+| Health check | Cơ bản | Camera, AI runtime, DB, nhiệt độ và sync queue |
+| Lưu trữ edge | microSD | SSD NVMe, WAL và log rotation |
 | Vận hành | PoC thủ công | systemd, watchdog và tự phục hồi |
 
 ---
@@ -470,13 +494,13 @@ Với vài trăm người, đối sánh cosine trực tiếp vẫn có thể đ�
 
 1. Cập nhật database để hỗ trợ nhiều embedding cho mỗi người.
 2. Hoàn thiện quy trình đăng ký 5–10 mẫu.
-3. Tích hợp model RKNN vào pipeline edge.
+3. Tối ưu model và runtime trên CPU Raspberry Pi 5.
 4. Bổ sung Quality Gate và xác nhận nhiều frame.
 5. Xây dựng SQLite offline queue.
 6. Hoàn thiện Sync Service và cơ chế chống trùng.
 7. Xây dựng Kiosk UI.
 8. Bổ sung health monitoring, watchdog và log rotation.
-9. Benchmark trên Orange Pi 5.
+9. Benchmark trên Raspberry Pi 5.
 10. Kiểm thử mất mạng, mất camera, restart và vận hành dài hạn.
 
 ---
@@ -485,7 +509,7 @@ Với vài trăm người, đối sánh cosine trực tiếp vẫn có thể đ�
 
 Kiến trúc đề xuất phân tách rõ hai vai trò:
 
-- **Orange Pi xử lý và quyết định tại chỗ.**
+- **Raspberry Pi xử lý và quyết định tại chỗ.**
 - **Server quản lý, đồng bộ và lưu trữ tập trung.**
 
 Thiết kế edge-first giúp giảm độ trễ và không phụ thuộc mạng. Thiết kế offline-first giúp bảo đảm sự kiện được lưu an toàn trước khi đồng bộ. Việc tách pipeline AI, nghiệp vụ, lưu trữ và đồng bộ thành các thành phần độc lập giúp hệ thống dễ kiểm thử, bảo trì và mở rộng.
