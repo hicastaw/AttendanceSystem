@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "roboto",
+        "files": [
+          ".impeccable/mocks/decision/canon.html"
+        ],
+        "createdAt": "2026-11-06T10:00:27.350Z",
+        "reason": "Claude: canon card intentionally depicts the stock Material admin, whose default face is Roboto"
+      }
+    ]
+  }
+}

@@ -1,0 +1,179 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-06T10:37:30.000Z",
+  "title": "Design System: Lab Access Admin",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Material Blue",
+        "canonical": "#1976d2",
+        "tonalRamp": ["#e3f2fd", "#90caf9", "#42a5f5", "#1976d2", "#1565c0", "#0d47a1"]
+      },
+      "neutral-bg-light": {
+        "role": "neutral",
+        "displayName": "Light Canvas Grey",
+        "canonical": "#f5f5f5",
+        "tonalRamp": ["#ffffff", "#f5f5f5", "#eeeeee", "#e0e0e0"]
+      },
+      "neutral-paper-light": {
+        "role": "neutral",
+        "displayName": "Paper White",
+        "canonical": "#ffffff",
+        "tonalRamp": ["#ffffff"]
+      },
+      "neutral-bg-dark": {
+        "role": "neutral",
+        "displayName": "Dark Canvas",
+        "canonical": "#121212",
+        "tonalRamp": ["#121212", "#1e1e1e", "#2c2c2c"]
+      },
+      "success": {
+        "role": "accent",
+        "displayName": "Success Green",
+        "canonical": "#2e7d32",
+        "tonalRamp": ["#e8f5e9", "#81c784", "#2e7d32", "#1b5e20"]
+      },
+      "warning": {
+        "role": "accent",
+        "displayName": "Warning Amber",
+        "canonical": "#ed6c02",
+        "tonalRamp": ["#fff3e0", "#ffb74d", "#ed6c02", "#e65100"]
+      },
+      "error": {
+        "role": "accent",
+        "displayName": "Error Red",
+        "canonical": "#d32f2f",
+        "tonalRamp": ["#ffebee", "#e57373", "#d32f2f", "#b71c1c"]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Headline / Page Title",
+        "purpose": "Screen titles in the top AppBar."
+      },
+      "title": {
+        "displayName": "Section Title",
+        "purpose": "Headers of cards and table groupings."
+      },
+      "body": {
+        "displayName": "Body & Data Grid Text",
+        "purpose": "Regular text, table row content, and event descriptions."
+      },
+      "label": {
+        "displayName": "Label & Chip Text",
+        "purpose": "Status chips, metadata sublabels, and timestamps."
+      }
+    },
+    "shadows": [
+      {
+        "name": "none",
+        "value": "none",
+        "purpose": "Flat surface default for cards and buttons."
+      },
+      {
+        "name": "modal-elevation",
+        "value": "0px 11px 15px -7px rgba(0,0,0,0.2), 0px 24px 38px 3px rgba(0,0,0,0.14), 0px 9px 46px 8px rgba(0,0,0,0.12)",
+        "purpose": "Material elevation 24 for dialog modals."
+      }
+    ],
+    "motion": [
+      {
+        "name": "standard-easing",
+        "value": "cubic-bezier(0.4, 0, 0.2, 1)",
+        "purpose": "Default Material transition easing."
+      },
+      {
+        "name": "duration-short",
+        "value": "200ms",
+        "purpose": "Quick state transitions for buttons and drawer."
+      }
+    ],
+    "breakpoints": [
+      { "name": "xs", "value": "0px" },
+      { "name": "sm", "value": "600px" },
+      { "name": "md", "value": "900px" },
+      { "name": "lg", "value": "1200px" },
+      { "name": "xl", "value": "1536px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Standard flat action button without elevation, natural letter casing.",
+      "html": "<button class=\"ds-btn-primary\">Thêm thành viên</button>",
+      "css": ".ds-btn-primary { background: #1976d2; color: #ffffff; padding: 6px 16px; font-family: Roboto, sans-serif; font-size: 0.875rem; font-weight: 500; border: none; border-radius: 8px; cursor: pointer; transition: background-color 200ms cubic-bezier(0.4, 0, 0.2, 1); line-height: 1.75; } .ds-btn-primary:hover { background-color: #1565c0; }"
+    },
+    {
+      "name": "Outlined Card",
+      "kind": "card",
+      "refersTo": "card-outlined",
+      "description": "Flat card container with subtle 1px border instead of elevation shadows.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-title\">Đang ở lab</div><div class=\"ds-card-stat\">6</div><div class=\"ds-card-caption\">trên 11 thành viên đang hoạt động</div></div>",
+      "css": ".ds-card { background: #ffffff; border: 1px solid rgba(0, 0, 0, 0.12); border-radius: 8px; padding: 16px; font-family: Roboto, sans-serif; } .ds-card-title { font-size: 0.875rem; color: rgba(0, 0, 0, 0.6); font-weight: 500; } .ds-card-stat { font-size: 2rem; font-weight: 400; color: #2e7d32; margin: 4px 0; font-variant-numeric: tabular-nums; } .ds-card-caption { font-size: 0.75rem; color: rgba(0, 0, 0, 0.6); }"
+    },
+    {
+      "name": "Status Chip Success",
+      "kind": "chip",
+      "refersTo": "chip-status",
+      "description": "Pill indicator for active or successfully registered states.",
+      "html": "<span class=\"ds-chip ds-chip-success\">Đang ở lab</span>",
+      "css": ".ds-chip { display: inline-flex; align-items: center; justify-content: center; height: 24px; padding: 0 8px; border-radius: 9999px; font-family: Roboto, sans-serif; font-size: 0.75rem; font-weight: 500; } .ds-chip-success { background-color: #2e7d32; color: #ffffff; }"
+    },
+    {
+      "name": "Status Chip Warning",
+      "kind": "chip",
+      "refersTo": "chip-status",
+      "description": "Pill indicator for missing exits, outdated faces, or offline devices.",
+      "html": "<span class=\"ds-chip ds-chip-warning\">Thiếu lượt ra</span>",
+      "css": ".ds-chip { display: inline-flex; align-items: center; justify-content: center; height: 24px; padding: 0 8px; border-radius: 9999px; font-family: Roboto, sans-serif; font-size: 0.75rem; font-weight: 500; } .ds-chip-warning { background-color: #ed6c02; color: #ffffff; }"
+    },
+    {
+      "name": "Status Chip Neutral",
+      "kind": "chip",
+      "refersTo": "chip-status",
+      "description": "Default neutral chip for checked-out events or inactive members.",
+      "html": "<span class=\"ds-chip ds-chip-default\">RA</span>",
+      "css": ".ds-chip { display: inline-flex; align-items: center; justify-content: center; height: 24px; padding: 0 8px; border-radius: 9999px; font-family: Roboto, sans-serif; font-size: 0.75rem; font-weight: 500; } .ds-chip-default { background-color: rgba(0, 0, 0, 0.08); color: rgba(0, 0, 0, 0.87); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Standard Operational Deck",
+    "overview": "Hệ thống quản trị điểm danh phòng lab được thiết kế theo chuẩn mực Material Design (hướng Canon), lấy sự chuẩn xác, rõ ràng và kiềm chế tối đa làm tôn chỉ. Toàn bộ giao diện phục vụ đối tượng giảng viên và quản trị viên phòng lab làm việc trên máy tính xách tay với nhiệm vụ then chốt: nắm bắt tức thì ai đang có mặt trong lab, tra cứu thống kê số giờ tham gia theo chu kỳ và kiểm soát danh sách thành viên cùng ảnh khuôn mặt.",
+    "keyCharacteristics": [
+      "Chuẩn mực Material Design chính thức với MUI v5",
+      "Chính trực về số liệu và trung thực về hiện trạng điểm danh",
+      "Tối ưu cho tác vụ quản trị với tabular-nums và phân cấp rõ ràng",
+      "Đầy đủ chế độ Dark/Light song song"
+    ],
+    "rules": [
+      {
+        "name": "The Single-Meaning Semantic Rule",
+        "body": "Mỗi màu trạng thái mang đúng một ý nghĩa trên toàn bộ ứng dụng: Xanh lá luôn là đang ở lab / đã đăng ký; Cam luôn là thiếu lượt ra / cần đăng ký lại / thiết bị offline; Xám luôn là đã ra / chưa có.",
+        "section": "colors"
+      },
+      {
+        "name": "The No-Uppercase-Action Rule",
+        "body": "Nút bấm và tab điều hướng giữ nguyên kiểu chữ tự nhiên (textTransform: 'none'), loại bỏ kiểu viết hoa toàn bộ để tăng khả năng đọc tiếng Việt.",
+        "section": "typography"
+      },
+      {
+        "name": "The Border-Over-Shadow Rule",
+        "body": "Bề mặt thẻ, bảng và vùng chứa tại trạng thái nghỉ dùng đường viền mảnh 1px thay cho bóng đổ mờ. Bóng đổ chỉ dành cho overlay/dialog.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do sử dụng các component chuẩn của MUI (@mui/material, @mui/x-data-grid, @mui/x-charts, @mui/x-date-pickers).",
+      "Do dùng fontVariantNumeric: 'tabular-nums' cho mọi con số và bảng dữ liệu.",
+      "Do hiển thị rõ ràng cảnh báo ngữ nghĩa khi có bất thường (thiếu lượt ra, cần đăng ký lại khuôn mặt)."
+    ],
+    "donts": [
+      "Don't tự ý thêm thư viện CSS/UI khác ngoài MUI.",
+      "Don't dùng hiệu ứng bóng đổ tùy tiện hoặc bóng gradient.",
+      "Don't viết hoa toàn bộ chữ trên nút bấm (text-transform: uppercase)."
+    ]
+  }
+}

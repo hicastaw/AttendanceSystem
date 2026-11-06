@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0}
+body{width:1440px;height:900px;overflow:hidden;background:#0E0E10;color:#F2F2F2;font:14px/1.45 "Be Vietnam Pro",sans-serif;display:grid;grid-template-columns:220px 1fr 360px}
+.rail{border-right:1px solid #222226;padding:24px 0;display:flex;flex-direction:column}
+.brand{font:500 13px 'JetBrains Mono',monospace;letter-spacing:.2em;padding:0 22px 30px;color:#9A9AA2}
+.rail a{padding:10px 22px;color:#9A9AA2}
+.rail a.on{color:#fff;box-shadow:inset 2px 0 #5EC8E5}
+.dev{margin-top:auto;padding:16px 22px;font:12px 'JetBrains Mono',monospace;color:#9A9AA2}
+.dev i{display:inline-block;width:8px;height:8px;background:#5EC8E5;margin-right:6px}
+main{padding:28px 36px;display:flex;flex-direction:column}
+.top{display:flex;align-items:baseline;gap:16px;margin-bottom:10px}
+.top h1{font:300 30px "Be Vietnam Pro";margin-right:auto}
+.tab{font:12px 'JetBrains Mono',monospace;color:#9A9AA2;border:1px solid #2A2A30;padding:5px 10px}
+.tab.on{color:#0E0E10;background:#F2F2F2}
+.plot{flex:1;position:relative}
+.plot svg{position:absolute;inset:0;width:100%;height:100%}
+.axis{display:flex;justify-content:space-between;font:12px 'JetBrains Mono',monospace;color:#9A9AA2;padding-top:6px}
+aside.now{border-left:1px solid #222226;padding:28px 26px}
+.num{font:300 88px/1 "Be Vietnam Pro";color:#5EC8E5}
+.sub{font:12px 'JetBrains Mono',monospace;color:#9A9AA2;margin:6px 0 22px;letter-spacing:.1em}
+.row{display:grid;grid-template-columns:1fr 56px 64px;padding:9px 0;border-bottom:1px solid #1E1E22;font-size:13.5px}
+.row span:nth-child(n+2){text-align:right;font-family:'JetBrains Mono',monospace;color:#C9C9CF}
+.warn{margin-top:20px;font-size:13px;color:#F2B134}
+</style></head><body>
+<aside class="rail"><div class="brand">LAB ACCESS</div><a class="on">Tổng quan</a><a>Thống kê</a><a>Lịch sử ra/vào</a><a>Thành viên</a><div class="dev"><i></i>RPI5_01 ONLINE<br>0 CHỜ ĐỒNG BỘ</div></aside>
+<main>
+  <div class="top"><h1>Thứ Sáu 06/11</h1><span class="tab on">HÔM NAY</span><span class="tab">TUẦN</span><span class="tab">THÁNG</span><span class="tab">XUẤT CSV</span></div>
+  <div class="plot"><svg viewBox="0 0 800 600" preserveAspectRatio="none" fill="#0E0E10" stroke="#F2F2F2" stroke-width="1.2">
+    <path d="M0 60 L120 60 L140 30 L380 28 L400 60 L800 60"/>
+    <path d="M0 100 L160 100 L180 72 L420 70 L440 100 L800 100"/>
+    <path d="M0 140 L190 140 L210 112 L520 110 L540 140 L800 140" stroke="#5EC8E5" stroke-width="2.4"/>
+    <path d="M0 180 L260 180 L280 152 L600 150 L620 180 L800 180"/>
+    <path d="M0 220 L330 220 L350 192 L640 190 L660 220 L800 220"/>
+    <path d="M0 260 L120 260 L140 232 L260 230 L280 260 L800 260"/>
+    <path d="M0 300 L400 300 L420 272 L700 270 L720 300 L800 300"/>
+    <path d="M0 340 L470 340 L490 312 L760 310 L780 340 L800 340"/>
+    <path d="M0 380 L200 380 L220 352 L330 350 L350 380 L800 380"/>
+    <path d="M0 420 L520 420 L540 392 L780 390 L800 420"/>
+    <path d="M0 460 L800 460"/>
+    <path d="M0 500 L300 500 L320 472 L460 470 L480 500 L800 500"/>
+    <path d="M0 540 L620 540 L640 512 L800 510"/>
+  </svg></div>
+  <div class="axis"><span>07:00</span><span>09:00</span><span>11:00</span><span>13:00</span><span>15:00</span><span>17:00</span><span>19:00</span></div>
+</main>
+<aside class="now">
+  <div class="num">07</div><div class="sub">ĐANG Ở LAB / 24</div>
+  <div class="row"><b>Nguyễn Minh Hiếu</b><span>08:12</span><span>6:41</span></div>
+  <div class="row"><b>Trần Thu Lan</b><span>08:40</span><span>6:13</span></div>
+  <div class="row"><b>Lê Quang Vinh</b><span>09:05</span><span>5:48</span></div>
+  <div class="row"><b>Phạm Đức Anh</b><span>10:22</span><span>4:31</span></div>
+  <div class="row"><b>Đỗ Hải Yến</b><span>11:47</span><span>3:06</span></div>
+  <div class="row"><b>Vũ Tiến Dũng</b><span>13:30</span><span>1:23</span></div>
+  <div class="row"><b>Hoàng Mai Chi</b><span>14:41</span><span>0:12</span></div>
+  <p class="warn">2 thành viên cần đăng ký lại khuôn mặt</p>
+</aside>
+</body></html>

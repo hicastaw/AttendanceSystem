@@ -148,7 +148,11 @@ Sau khi sửa: `docker compose up -d` để container nhận giá trị mới.
 | `AI_SERVICE_URL` | Không | Chỉ dùng cho chế độ legacy `EMBEDDING_BACKEND=remote` |
 | `SIMILARITY_THRESHOLD` | Không | Ngưỡng nhận diện, mặc định `0.60` |
 | `ATTENDANCE_COOLDOWN_SECONDS` | Không | Khoảng cách tối thiểu giữa 2 lần ghi của cùng 1 người, mặc định `60` |
-| `FACE_DATA_REFRESH_SECONDS` | Không | Chu kỳ tải lại danh sách khuôn mặt từ server, mặc định `300` |
+| `FACE_DATA_REFRESH_SECONDS` | Không | Chu kỳ dự phòng kiểm tra khuôn mặt mới, mặc định `300` (bình thường heartbeat báo ngay) |
+| `HEARTBEAT_SECONDS` | Không | Chu kỳ báo trạng thái lên server, mặc định `30` |
+| `SYNC_BATCH_SIZE`, `SYNC_RETRY_MIN_SECONDS`, `SYNC_RETRY_MAX_SECONDS` | Không | Số sự kiện mỗi lô (`50`) và thời gian chờ retry khi mất mạng (`2`→`60` giây) |
+| `REJECTED_RETENTION_DAYS` | Không | Giữ sự kiện bị server từ chối trên Pi bao nhiêu ngày để tra cứu, mặc định `30` |
+| `EDGE_DB_PATH` | Không | File SQLite của edge, mặc định `data/edge.db` cạnh code |
 | `STREAM_PORT` | Không | Port stream/kiosk/health, mặc định `5000` |
 
 Sau khi sửa: `sudo systemctl restart face-attendance-edge`.
@@ -251,7 +255,7 @@ Không chạy `main.py` bằng tay khi service đang chạy — hai tiến trìn
 |---|---|
 | `/` | Trang debug: video + chỉ số + kết quả nhận diện |
 | `/kiosk` | Giao diện kiosk: video toàn màn hình + "Xin chào / Tạm biệt" |
-| `/health` | JSON trạng thái camera, model, kết nối server |
+| `/health` | JSON trạng thái camera, model, kết nối server, đồng bộ (`events_pending`, `last_sync_at`, `face_data_version`) |
 
 Thử nhận diện bằng ảnh (không cần camera):
 `.venv/bin/python3 recognize_image.py <ảnh|thư mục>` — thêm `--dry-run` để không gửi sự kiện.
@@ -339,9 +343,11 @@ thường, trên máy server dùng `localhost`.
 ## Sử dụng hằng ngày
 
 - **Đăng ký người mới:** trang quản trị → *Người dùng & khuôn mặt* → nhập mã + họ tên
-  → chụp/tải ảnh rõ mặt, nhìn thẳng, đủ sáng → *Lưu khuôn mặt*. Edge tự tải lại danh
-  sách mỗi `FACE_DATA_REFRESH_SECONDS` (mặc định 5 phút); muốn nhận ngay thì
-  `sudo systemctl restart face-attendance-edge`.
+  → chụp/tải ảnh rõ mặt, nhìn thẳng, đủ sáng → *Lưu khuôn mặt*. Edge nhận được trong
+  vòng một chu kỳ heartbeat (mặc định 30 giây), không cần restart.
+- **Mất mạng / server tắt:** edge vẫn nhận diện bằng danh sách khuôn mặt đã lưu trong
+  SQLite và vẫn ghi nhận VÀO/RA; kiosk hiện "Offline — vẫn ghi nhận, sẽ đồng bộ sau".
+  Khi có mạng lại, sự kiện tự gửi lên server theo đúng thứ tự, không trùng lặp.
 - **VÀO/RA:** mỗi lần được nhận diện, trạng thái người đó được đảo (VÀO → RA → VÀO…),
   cách nhau ít nhất `ATTENDANCE_COOLDOWN_SECONDS` (mặc định 60 giây).
 - **"Cần đăng ký lại"** trên trang quản trị: khuôn mặt được tạo bằng model cũ, edge sẽ
@@ -357,7 +363,9 @@ thường, trên máy server dùng `localhost`.
 | Server trả `401 Device key không hợp lệ` | `EDGE_DEVICE_KEY` hai bên không khớp |
 | Edge báo `Embedding server chưa xác minh cùng EdgeFace` | Server chưa build bản mới hoặc model hai bên khác nhau → `docker compose up -d --build`, đăng ký lại khuôn mặt |
 | Log `faces=0` mãi | Camera không thấy mặt: xem `http://<IP_PI>:5000/`, chỉnh góc camera, thêm ánh sáng |
-| Người đã đăng ký nhưng hiện `Unknown` | Chưa tới chu kỳ tải lại (restart service), ảnh đăng ký kém, hoặc ánh sáng/góc quá khác ảnh đăng ký |
+| Người đã đăng ký nhưng hiện `Unknown` | Edge chưa kết nối server để tải bản mới (xem `face_data_version` trong `/health`), ảnh đăng ký kém, hoặc ánh sáng/góc quá khác ảnh đăng ký |
+| `/health` có `events_pending` > 0 mãi | Edge không gửi được lên server — xem `last_sync_error`; kiểm tra `SERVER_BASE_URL`, firewall. Sự kiện vẫn an toàn trong `data/edge.db` |
+| `events_rejected` > 0 | Server từ chối vĩnh viễn (thường do người dùng đã bị xoá). Xem `sqlite3 data/edge.db "SELECT * FROM access_events WHERE sync_status='rejected'"` |
 | `Thiếu rpicam-vid` / camera không mở | `rpicam-hello --list-cameras`; kiểm tra cáp CSI; `CAMERA_BACKEND=rpicam` trong `.env` |
 | Service không chạy | `systemctl status face-attendance-edge`, `journalctl -u face-attendance-edge -n 50` |
 | Màn hình kiosk trống | Edge chưa chạy (`curl localhost:5000/health` trên Pi); xem `/tmp/kiosk.log` |
@@ -367,11 +375,20 @@ thường, trên máy server dùng `localhost`.
 
 1. Admin đăng ký khuôn mặt trên trang quản trị → AI service trích embedding EdgeFace →
    lưu vào SQLite kèm metadata `pipeline` (sha256 model + cách tiền xử lý).
-2. Edge tải danh sách embedding (`GET /api/face-data`) và trạng thái ra/vào gần nhất
-   (`GET /api/last-state`) khi khởi động, làm mới định kỳ.
+2. Edge tải danh sách embedding (`GET /api/face-data`, có `version`/ETag) và lưu vào
+   SQLite cục bộ (`edge/data/edge.db`). Heartbeat mỗi 30 giây (`POST /api/devices/heartbeat`)
+   báo trạng thái edge; server trả `face_data_version` — khác bản đang dùng thì edge tải lại ngay.
 3. Edge nhận diện tại chỗ trên CPU của Pi (~25ms/khuôn mặt), đảo trạng thái vào/ra theo
-   từng người, gửi `POST /api/access-events`.
-4. Admin xem lịch sử ra/vào trên trang quản trị.
+   từng người. Sự kiện được **ghi xuống SQLite trước** (trạng thái `pending`), rồi luồng
+   đồng bộ gửi lên server theo lô (`POST /api/access-events/batch`). Server chống trùng
+   bằng `event_id`; mất mạng thì retry với thời gian chờ tăng dần (2s → 60s).
+4. Admin xem lịch sử ra/vào và trạng thái thiết bị (`GET /api/devices`: online/offline,
+   số sự kiện chờ đồng bộ) trên trang quản trị.
+
+**Offline-first:** server hoặc mạng gặp sự cố thì edge vẫn nhận diện (danh sách khuôn mặt
+lấy từ SQLite), vẫn ghi nhận VÀO/RA (trạng thái vào/ra cũng lưu trong SQLite) và tự đồng
+bộ khi có kết nối lại. Sự kiện được xoá khỏi edge ngay khi server đã nhận, nên khi có mạng
+SQLite chỉ còn trạng thái VÀO/RA và cache khuôn mặt.
 
 Edge xác thực với server bằng header `X-Device-Key`. Server và edge **phải dùng cùng
 model** (`edgeface_xs_gamma_06.onnx`) và cùng cách align/tiền xử lý; `/api/face-data`

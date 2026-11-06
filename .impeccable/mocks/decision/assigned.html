@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0}
+body{width:1440px;height:900px;overflow:hidden;background:#F7F8FA;color:#1A1D23;font:14px/1.45 "Be Vietnam Pro",sans-serif;font-variant-numeric:tabular-nums;display:grid;grid-template-columns:232px 1fr}
+.rail{background:#14325C;color:#DCE4F0;padding:22px 0;display:flex;flex-direction:column}
+.brand{font:600 19px 'Source Serif 4',serif;color:#fff;padding:0 22px 26px}
+.nav a{display:flex;gap:12px;align-items:center;padding:11px 22px;color:#C9D4E6;text-decoration:none;font-weight:500}
+.nav a.on{background:rgba(255,255,255,.1);color:#fff;box-shadow:inset 3px 0 #E69F00}
+.nav i{width:18px;height:18px;border:2px solid currentColor;border-radius:4px;opacity:.8}
+.dev{margin-top:auto;padding:16px 22px;font-size:12.5px;color:#C9D4E6;border-top:1px solid rgba(255,255,255,.12)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#009E73;margin-right:6px}
+main{padding:22px 32px;display:flex;flex-direction:column;gap:18px}
+.top{display:flex;align-items:center;gap:14px}
+.top h1{font:600 26px 'Source Serif 4',serif;margin-right:auto}
+.chip{border:1px solid #C7CDD6;border-radius:16px;padding:5px 12px;font-size:13px;background:#fff}
+.chip.on{background:#0072B2;color:#fff;border-color:#0072B2}
+.btn{border:1px solid #0072B2;color:#0072B2;border-radius:6px;padding:7px 14px;font-weight:500;background:#fff}
+.grid{display:grid;grid-template-columns:1.45fr 1fr;gap:28px;flex:1;min-height:0}
+.fig{display:flex;flex-direction:column}
+.big{display:flex;align-items:baseline;gap:14px}
+.big b{font:700 96px/1 "Be Vietnam Pro";color:#0072B2;letter-spacing:-2px}
+.big span{font-size:22px;color:#4A5262}
+.lbl{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#6B7280;font-weight:500}
+.chart{margin-top:14px;height:250px;position:relative;border-left:1px solid #1A1D23;border-bottom:1px solid #1A1D23}
+.chart svg{position:absolute;inset:0}
+.ticks{display:flex;justify-content:space-between;font-size:12px;color:#6B7280;padding:4px 0 0}
+.cap{margin-top:12px;font:15px/1.5 'Source Serif 4',serif;color:#2B3140}
+.cap b{font-weight:600}
+table{width:100%;border-collapse:collapse}
+th{font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:#4A5262;font-weight:500;text-align:left;padding:8px 6px}
+td{padding:9px 6px;border:0}
+thead tr{border-top:2px solid #1A1D23;border-bottom:1px solid #1A1D23}
+tbody tr:last-child{border-bottom:2px solid #1A1D23}
+.r{text-align:right}
+.in{color:#0072B2;font-weight:500}
+.warn{color:#B85C00}
+.low{display:grid;grid-template-columns:1fr 1fr;gap:28px}
+.bars div{display:grid;grid-template-columns:120px 1fr 64px;gap:10px;align-items:center;margin:6px 0;font-size:13px}
+.bars i{height:12px;background:#0072B2;display:block}
+.bars i.b{background:#E69F00}
+</style></head><body>
+<aside class="rail">
+  <div class="brand">Lab Access</div>
+  <nav class="nav">
+    <a class="on"><i></i>Tổng quan</a><a><i></i>Thống kê</a><a><i></i>Lịch sử ra/vào</a><a><i></i>Thành viên</a>
+  </nav>
+  <div class="dev"><span class="dot"></span>RPI5_01 · online<br>0 sự kiện chờ đồng bộ</div>
+</aside>
+<main>
+  <div class="top"><h1>Tổng quan · Thứ Sáu 06/11</h1><span class="chip on">Hôm nay</span><span class="chip">Tuần này</span><span class="chip">Tháng này</span><span class="btn">Xuất CSV</span></div>
+  <div class="grid">
+    <section class="fig">
+      <div class="lbl">Hình 1 · Đang ở lab</div>
+      <div class="big"><b>7</b><span>/ 24 thành viên</span></div>
+      <div class="chart"><svg viewBox="0 0 600 250" preserveAspectRatio="none">
+        <path d="M0 250 H60 V200 H110 V150 H170 V110 H230 V70 H300 V40 H360 V90 H420 V120 H480 V140 H520 V250 Z" fill="#0072B2" fill-opacity=".14"/>
+        <path d="M0 250 H60 V200 H110 V150 H170 V110 H230 V70 H300 V40 H360 V90 H420 V120 H480 V140 H520" fill="none" stroke="#0072B2" stroke-width="2.5"/>
+        <line x1="520" y1="0" x2="520" y2="250" stroke="#E69F00" stroke-dasharray="4 4"/></svg></div>
+      <div class="ticks"><span>7:00</span><span>9:00</span><span>11:00</span><span>13:00</span><span>15:00</span><span>17:00</span><span>19:00</span></div>
+      <p class="cap"><b>Hình 1.</b> Số người có mặt theo giờ hôm nay. Đông nhất 10:30 với 9 người; hiện 7 người, giảm từ 14:00.</p>
+    </section>
+    <section>
+      <div class="lbl">Bảng 1 · Người đang có mặt</div>
+      <table style="margin-top:10px"><thead><tr><th>Thành viên</th><th>Mã</th><th class="r">Vào lúc</th><th class="r">Đã ở</th></tr></thead>
+      <tbody>
+        <tr><td>Nguyễn Minh Hiếu</td><td>NV001</td><td class="r in">08:12</td><td class="r">6 giờ 41</td></tr>
+        <tr><td>Trần Thu Lan</td><td>NV004</td><td class="r in">08:40</td><td class="r">6 giờ 13</td></tr>
+        <tr><td>Lê Quang Vinh</td><td>NV007</td><td class="r in">09:05</td><td class="r">5 giờ 48</td></tr>
+        <tr><td>Phạm Đức Anh</td><td>NV011</td><td class="r in">10:22</td><td class="r">4 giờ 31</td></tr>
+        <tr><td>Đỗ Hải Yến</td><td>NV015</td><td class="r in">11:47</td><td class="r">3 giờ 06</td></tr>
+        <tr><td>Vũ Tiến Dũng</td><td>NV018</td><td class="r in">13:30</td><td class="r">1 giờ 23</td></tr>
+        <tr><td>Hoàng Mai Chi</td><td>NV020</td><td class="r in">14:41</td><td class="r">0 giờ 12</td></tr>
+      </tbody></table>
+      <p class="cap" style="font-size:14px"><b>Bảng 1.</b> 7 người; lâu nhất Nguyễn Minh Hiếu (6 giờ 41). <span class="warn">2 thành viên cần đăng ký lại khuôn mặt.</span></p>
+    </section>
+  </div>
+  <div class="low">
+    <section><div class="lbl">Hình 2 · Giờ có mặt tuần này</div>
+      <div class="bars"><div>Nguyễn Minh Hiếu<i style="width:92%"></i><span class="r">31 giờ 20</span></div><div>Trần Thu Lan<i style="width:78%"></i><span class="r">26 giờ 05</span></div><div>Lê Quang Vinh<i class="b" style="width:64%"></i><span class="r">21 giờ 40</span></div></div></section>
+    <section><div class="lbl">Bảng 2 · Lượt ra/vào gần nhất</div>
+      <table style="margin-top:6px"><tbody><tr style="border-top:2px solid #1A1D23"><td>14:41</td><td>Hoàng Mai Chi</td><td class="in">VÀO</td><td class="r">94,1%</td></tr><tr><td>14:02</td><td>Ngô Bảo Ngọc</td><td>RA</td><td class="r">91,7%</td></tr></tbody></table></section>
+  </div>
+</main>
+</body></html>
