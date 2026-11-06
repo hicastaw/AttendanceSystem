@@ -40,3 +40,18 @@ CREATE TABLE IF NOT EXISTS access_events (
 
 CREATE INDEX IF NOT EXISTS idx_access_events_user_time ON access_events(user_id, event_time DESC);
 CREATE INDEX IF NOT EXISTS idx_access_events_time ON access_events(event_time DESC);
+
+-- Thiết bị biên: cập nhật mỗi lần edge gửi heartbeat hoặc sự kiện. Trang quản trị
+-- dùng last_seen_at để biết thiết bị online/offline, pending_events để biết còn bao
+-- nhiêu sự kiện chưa đồng bộ lên server.
+CREATE TABLE IF NOT EXISTS devices (
+    device_id         TEXT PRIMARY KEY,
+    first_seen_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S', 'now', 'localtime')),
+    last_seen_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S', 'now', 'localtime')),
+    last_ip           TEXT,
+    last_event_at     TEXT,       -- lần cuối server nhận sự kiện mới từ thiết bị
+    pending_events    INTEGER,    -- số sự kiện edge báo còn chờ đồng bộ (theo heartbeat)
+    rejected_events   INTEGER,
+    face_data_version TEXT,       -- phiên bản dữ liệu khuôn mặt edge đang dùng
+    status            TEXT        -- JSON trạng thái edge gửi kèm heartbeat (camera, model...)
+);

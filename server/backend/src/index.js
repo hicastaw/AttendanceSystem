@@ -7,6 +7,8 @@ import { fileURLToPath } from 'url';
 import authRouter from './routes/auth.js';
 import usersRouter from './routes/users.js';
 import accessEventsRouter from './routes/access-events.js';
+import devicesRouter from './routes/devices.js';
+import statsRouter from './routes/stats.js';
 
 // Đảm bảo file DB + schema được tạo trước khi routes dùng tới.
 import './db.js';
@@ -24,7 +26,9 @@ app.get('/api/health', (req, res) => {
 
 app.use('/api/auth', authRouter);
 app.use('/api/users', usersRouter);
-app.use('/api', accessEventsRouter); // /api/access-events, /api/last-state, /api/face-data
+app.use('/api/devices', devicesRouter);
+app.use('/api', accessEventsRouter); // /api/access-events(/batch), /api/last-state, /api/face-data
+app.use('/api', statsRouter); // /api/stats, /api/sessions, /api/presence
 
 // Trang quản trị: bản build của server/frontend (npm run build) — 1 process duy
 // nhất phục vụ cả API lẫn giao diện. Khi phát triển, dùng Vite dev server (5173).

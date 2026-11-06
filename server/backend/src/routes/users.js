@@ -8,28 +8,85 @@ import { uploadMemory } from '../upload.js';
 const router = express.Router();
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8001';
 
-// GET /api/users — danh sách người dùng + đã có hồ sơ khuôn mặt hay chưa
-router.get('/', requireAdmin, (req, res) => {
-  const rows = db.prepare(`
+const normalizeCode = (code) => String(code).trim().toUpperCase();
+
+const selectUsers = (where) => db.prepare(`
     SELECT
       u.user_id, u.user_code, u.full_name, u.email, u.status, u.created_at,
       CASE WHEN fp.user_id IS NOT NULL THEN 1 ELSE 0 END AS has_face_profile,
       fp.updated_at AS face_updated_at,
-      fp.pipeline AS face_pipeline
+      fp.quality_score AS face_quality_score,
+      fp.pipeline AS face_pipeline,
+      (SELECT MAX(e.event_time) FROM access_events e WHERE e.user_id = u.user_id) AS last_seen_at
     FROM users u
     LEFT JOIN face_profiles fp ON fp.user_id = u.user_id
+    ${where}
     ORDER BY u.user_code
-  `).all();
+  `);
 
-  // face_status: none = chưa đăng ký; outdated = embedding tạo bằng model/pipeline
-  // cũ, edge sẽ bỏ qua -> cần đăng ký lại; ok = đang được edge dùng.
+// face_status: none = chưa đăng ký; outdated = embedding tạo bằng model/pipeline
+// cũ, edge sẽ bỏ qua -> cần đăng ký lại; ok = đang được edge dùng.
+function withFaceStatus(rows) {
   const current = getCurrentPipeline();
-  const data = rows.map(({ face_pipeline, ...row }) => ({
+  return rows.map(({ face_pipeline, ...row }) => ({
     ...row,
     face_status: !row.has_face_profile ? 'none'
       : (face_pipeline && face_pipeline === current ? 'ok' : 'outdated'),
   }));
-  res.json({ status: 'success', data });
+}
+
+// GET /api/users — danh sách người dùng + tình trạng khuôn mặt + lần cuối có mặt
+router.get('/', requireAdmin, (req, res) => {
+  res.json({ status: 'success', data: withFaceStatus(selectUsers('').all()) });
+});
+
+// GET /api/users/:code — chi tiết 1 người dùng
+router.get('/:code', requireAdmin, (req, res) => {
+  const row = selectUsers('WHERE u.user_code = ?').get(normalizeCode(req.params.code));
+  if (!row) {
+    return res.status(404).json({ status: 'error', message: `Không tìm thấy người dùng ${req.params.code}.` });
+  }
+  res.json({ status: 'success', data: withFaceStatus([row])[0] });
+});
+
+// PATCH /api/users/:code — sửa họ tên, email, trạng thái (active/inactive = khoá).
+router.patch('/:code', requireAdmin, (req, res) => {
+  const code = normalizeCode(req.params.code);
+  const { full_name, email, status } = req.body || {};
+  const sets = [];
+  const params = [];
+  if (full_name !== undefined) {
+    if (!String(full_name).trim()) {
+      return res.status(400).json({ status: 'error', message: 'Họ tên không được để trống.' });
+    }
+    sets.push('full_name = ?'); params.push(String(full_name).trim());
+  }
+  if (email !== undefined) { sets.push('email = ?'); params.push(String(email).trim() || null); }
+  if (status !== undefined) {
+    if (!['active', 'inactive'].includes(status)) {
+      return res.status(400).json({ status: 'error', message: 'status phải là active hoặc inactive.' });
+    }
+    sets.push('status = ?'); params.push(status);
+  }
+  if (!sets.length) {
+    return res.status(400).json({ status: 'error', message: 'Không có trường nào để cập nhật.' });
+  }
+  const info = db.prepare(`UPDATE users SET ${sets.join(', ')} WHERE user_code = ?`).run(...params, code);
+  if (!info.changes) {
+    return res.status(404).json({ status: 'error', message: `Không tìm thấy người dùng ${code}.` });
+  }
+  res.json({ status: 'success', data: withFaceStatus([selectUsers('WHERE u.user_code = ?').get(code)])[0] });
+});
+
+// DELETE /api/users/:code — xoá hẳn người dùng, kèm khuôn mặt và toàn bộ lịch sử
+// ra/vào (ON DELETE CASCADE). Không khôi phục được.
+router.delete('/:code', requireAdmin, (req, res) => {
+  const code = normalizeCode(req.params.code);
+  const info = db.prepare('DELETE FROM users WHERE user_code = ?').run(code);
+  if (!info.changes) {
+    return res.status(404).json({ status: 'error', message: `Không tìm thấy người dùng ${code}.` });
+  }
+  res.json({ status: 'success', data: { user_code: code } });
 });
 
 // POST /api/users — tạo người dùng mới (chưa có khuôn mặt)
