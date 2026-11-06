@@ -63,11 +63,9 @@ def validate_face(face_image: UploadFile = File(...)):
     validate_upload_file(face_image)
     img_bgr = decode_image(face_image.file.read())
 
-    h, w, _ = img_bgr.shape
-    engine.detector.setInputSize((w, h))
-    _, faces = engine.detector.detect(img_bgr)
+    faces = engine.detect_faces(img_bgr, detect_width=640)
 
-    if faces is None or len(faces) == 0:
+    if len(faces) == 0:
         return {
             "is_valid": False, "embedding": None, "sharpness_score": 0.0,
             "message": "Không phát hiện khuôn mặt trong ảnh. Vui lòng chụp lại.",
@@ -109,11 +107,9 @@ def extract_face(face_image: UploadFile = File(...)):
     validate_upload_file(face_image)
     img_bgr = decode_image(face_image.file.read())
 
-    h, w, _ = img_bgr.shape
-    engine.detector.setInputSize((w, h))
-    _, faces = engine.detector.detect(img_bgr)
+    faces = engine.detect_faces(img_bgr, detect_width=640)
 
-    if faces is None or len(faces) == 0:
+    if len(faces) == 0:
         return {"found": False, "embedding": None, "error_code": "NO_FACE"}
 
     face = faces[0]

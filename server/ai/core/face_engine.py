@@ -91,6 +91,29 @@ class FaceEngine:
         landmarks = face_data[4:14].reshape((5, 2)).astype(np.float32)
         return cv2.warpAffine(image, similarity_transform(landmarks), (112, 112))
 
+    def detect_faces(self, image, detect_width=640):
+        """Phát hiện khuôn mặt bằng YuNet, tự động thu nhỏ nếu ảnh quá lớn để YuNet
+        đạt độ nhạy tối ưu (ảnh điện thoại 2K-4K nếu để nguyên kích thước dễ bị trượt).
+        Toạ độ trả về được quy đổi ngược về hệ toạ độ ảnh gốc."""
+        h, w = image.shape[:2]
+        scale = 1.0
+        small = image
+        if detect_width and w > detect_width:
+            scale = w / float(detect_width)
+            small = cv2.resize(image, (detect_width, max(1, int(h / scale))))
+
+        sh, sw = small.shape[:2]
+        self.detector.setInputSize((sw, sh))
+        _, faces = self.detector.detect(small)
+
+        if faces is None or len(faces) == 0:
+            return []
+
+        faces = faces.copy()
+        if scale != 1.0:
+            faces[:, :14] *= scale
+        return faces
+
     def calculate_shapeness(self, image):
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         return cv2.Laplacian(gray, cv2.CV_64F).var()
