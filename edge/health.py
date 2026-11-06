@@ -20,6 +20,9 @@ class AppState:
         self.known_embeddings_count = 0
         self.enrollment_status = "loading"
         self.enrollment_source = "server"
+        self.face_data_version = None
+        # Attendance mode gắn hàm trả trạng thái đồng bộ (sự kiện chờ gửi, lần sync cuối...).
+        self.extra_health = None
         self.faces_detected_total = 0
         self.embeddings_generated_total = 0
         self.frames_processed = 0
@@ -64,7 +67,7 @@ class AppState:
         frame_age = now - self._last_frame_at if self._last_frame_at is not None else None
         inference_age = now - self._last_inference if self._last_inference is not None else None
         streaming = self.camera_opened and frame_age is not None and frame_age < 3
-        return {
+        health = {
             "status": "stopped" if self.stopped else ("running" if streaming else "waiting_for_camera"),
             "test_mode": self.test_mode,
             "attendance_enabled": not self.test_mode,
@@ -80,6 +83,7 @@ class AppState:
             "identity_status": "No enrolled identities" if self.known_embeddings_count == 0 else "Enrollment loaded",
             "enrollment_status": self.enrollment_status,
             "enrollment_source": self.enrollment_source,
+            "face_data_version": self.face_data_version,
             "faces_detected_total": self.faces_detected_total,
             "embeddings_generated_total": self.embeddings_generated_total,
             "fps_estimate": round(self.fps_estimate, 2),
@@ -97,3 +101,6 @@ class AppState:
             "last_error": self.last_error,
             "faces": self.faces if streaming and inference_age is not None and inference_age < 3 else [],
         }
+        if self.extra_health is not None:
+            health.update(self.extra_health())
+        return health

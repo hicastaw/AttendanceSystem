@@ -65,7 +65,8 @@ function pick(faces){
  return null;}
 async function refresh(){try{
  const r=await fetch('/health',{cache:'no-store'});const s=await r.json();
- $('conn').textContent=s.camera_status!=='streaming'?'⚠ Camera chưa sẵn sàng':(s.server_reachable||s.test_mode?'':'⚠ Mất kết nối server');
+ const pending=s.events_pending?` (${s.events_pending} chờ đồng bộ)`:'';
+ $('conn').textContent=s.camera_status!=='streaming'?'⚠ Camera chưa sẵn sàng':(s.server_reachable||s.test_mode?(pending?'Đang đồng bộ'+pending:''):'⚠ Offline — vẫn ghi nhận, sẽ đồng bộ sau'+pending);
  const p=pick(s.faces||[]);
  // Không để "Không nhận diện được"/cooldown đè lên thông báo VÀO/RA vừa hiện.
  if(p&&(p[0]==='sent'||Date.now()>hideAt-2000))show(p[1],p[2],p[3]);

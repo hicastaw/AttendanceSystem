@@ -2,8 +2,10 @@
 
 Không còn khái niệm phiên/sớm/muộn — chỉ còn 2 loại sự kiện: check_in, check_out.
 Thiết bị biên tự QUYẾT ĐỊNH loại sự kiện bằng cách toggle theo trạng thái gần nhất
-của từng người (lưu trong RAM, được "mồi" lúc khởi động từ GET /api/last-state để
-không bị sai ngay sau khi restart edge).
+của từng người TRONG NGÀY: lần quét đầu tiên mỗi ngày luôn là check_in, sau đó lần
+lượt check_out/check_in. Reset theo ngày để một lần quên quét RA hôm trước không làm
+ngược chiều cả ngày hôm sau. Trạng thái được "mồi" lúc khởi động từ SQLite cục bộ
+(hoặc GET /api/last-state lần đầu) để không bị sai ngay sau khi restart edge.
 
 - So khớp cosine với cache embeddings tải từ server (embedding đã L2-normalize ở
   cả 2 phía nên cosine similarity = dot product).
@@ -22,17 +24,23 @@ logger = logging.getLogger(__name__)
 _VN_TZ = timezone(timedelta(hours=7))
 
 
+def _today():
+    return datetime.now(_VN_TZ).date().isoformat()
+
+
 class AttendanceDecision:
     def __init__(self, similarity_threshold=0.60, cooldown_seconds=60):
         self.similarity_threshold = similarity_threshold
         self.cooldown_seconds = cooldown_seconds
         self._last_sent = {}   # user_code -> time.monotonic() lúc gửi gần nhất (cooldown)
         self._last_state = {}  # user_code -> "check_in" | "check_out" (trạng thái hiện tại)
+        self._last_day = {}    # user_code -> "YYYY-MM-DD" (giờ VN) của sự kiện gần nhất
 
-    def seed_last_state(self, state_map):
-        """state_map: {user_code: 'check_in'|'check_out'} lấy từ GET /api/last-state
-        lúc khởi động, để toggle không bị sai ngay sau khi restart tiến trình edge."""
+    def seed_last_state(self, state_map, day_map=None):
+        """state_map: {user_code: 'check_in'|'check_out'}; day_map: {user_code: 'YYYY-MM-DD'}
+        ngày của sự kiện đó. Người không có ngày coi như sự kiện cũ (lần quét tới là check_in)."""
         self._last_state.update(state_map or {})
+        self._last_day.update(day_map or {})
         logger.info("Đã nạp trạng thái ra/vào gần nhất cho %d người dùng", len(self._last_state))
 
     def match(self, embedding, known_embeddings):
@@ -62,14 +70,17 @@ class AttendanceDecision:
             return True
         return (time.monotonic() - last) >= self.cooldown_seconds
 
-    def next_event_type(self, user_code):
-        """Toggle đơn giản: chưa từng thấy hoặc lần trước là check_out -> check_in;
-        lần trước là check_in -> check_out."""
+    def next_event_type(self, user_code, today=None):
+        """Lần đầu trong ngày -> check_in; trong ngày: sau check_in là check_out và ngược lại."""
+        today = today or _today()
+        if self._last_day.get(user_code) != today:
+            return "check_in"
         return "check_out" if self._last_state.get(user_code) == "check_in" else "check_in"
 
-    def mark_sent(self, user_code, event_type):
+    def mark_sent(self, user_code, event_type, today=None):
         self._last_sent[user_code] = time.monotonic()
         self._last_state[user_code] = event_type
+        self._last_day[user_code] = today or _today()
 
     @staticmethod
     def build_event(device_id, user_code, event_type, similarity):

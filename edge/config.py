@@ -70,9 +70,19 @@ DEVICE_ID = os.environ.get("DEVICE_ID", "RPI5_01")
 EDGE_DEVICE_KEY = os.environ.get("EDGE_DEVICE_KEY", "")
 
 HTTP_TIMEOUT_SECONDS = _get_float("HTTP_TIMEOUT_SECONDS", 3)
-# Không còn khái niệm phiên/session — chỉ cần định kỳ đồng bộ lại embeddings
-# (vd khi có người mới đăng ký khuôn mặt qua trang quản lý).
+# Chu kỳ dự phòng kiểm tra dữ liệu khuôn mặt mới (ETag, không đổi thì không tải lại).
+# Bình thường edge tải lại ngay khi heartbeat báo server có version mới.
 FACE_DATA_REFRESH_SECONDS = _get_int("FACE_DATA_REFRESH_SECONDS", 300)
+
+# --- Lưu trữ cục bộ + đồng bộ (offline-first, xem local_store.py, sync_service.py) ---
+EDGE_DB_PATH = os.environ.get("EDGE_DB_PATH", os.path.join(BASE_DIR, "data", "edge.db"))
+SYNC_BATCH_SIZE = max(1, _get_int("SYNC_BATCH_SIZE", 50))
+SYNC_RETRY_MIN_SECONDS = _get_float("SYNC_RETRY_MIN_SECONDS", 2)
+SYNC_RETRY_MAX_SECONDS = _get_float("SYNC_RETRY_MAX_SECONDS", 60)
+HEARTBEAT_SECONDS = _get_float("HEARTBEAT_SECONDS", 30)
+# Sự kiện server đã nhận được xoá ngay khỏi edge. Chỉ sự kiện bị server từ chối
+# (vd người dùng đã bị xoá) được giữ lại bấy nhiêu ngày để tra cứu rồi tự xoá.
+REJECTED_RETENTION_DAYS = _get_int("REJECTED_RETENTION_DAYS", 30)
 
 # --- Nghiệp vụ ra/vào (check-in/check-out) ---
 ATTENDANCE_COOLDOWN_SECONDS = _get_int("ATTENDANCE_COOLDOWN_SECONDS", 60)

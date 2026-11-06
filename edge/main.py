@@ -22,7 +22,9 @@ from face_detector import FaceDetector
 from face_recognizer import FaceRecognizer, RemoteFaceRecognizer, align_face
 from health import AppState
 from local_enrollment import DEFAULT_ENROLLMENT_FILE, load_local_enrollments, pipeline_metadata
+from local_store import LocalStore
 from stream_server import build_stream_server
+from sync_service import SyncService
 
 logging.basicConfig(
     level=getattr(logging, config.LOG_LEVEL.upper(), logging.INFO),
@@ -40,9 +42,13 @@ def _handle_signal(signum, _frame):
 
 def load_known_embeddings(api_client):
     raw = api_client.get_face_data()
+    return parse_face_data(raw, getattr(api_client, 'face_data_pipeline', None))
+
+
+def parse_face_data(raw, actual):
+    """Kiểm tra pipeline + lọc vector hợp lệ từ dữ liệu face-data (server hoặc cache cục bộ)."""
     if raw and config.RECOGNIZER_PROFILE == 'edgeface':
         expected = pipeline_metadata()
-        actual = getattr(api_client, 'face_data_pipeline', None)
         keys = ('recognizer_sha256', 'preprocessing', 'embedding_dimension')
         if not isinstance(actual, dict) or any(actual.get(key) != expected[key] for key in keys):
             raise ValueError('Embedding server chưa xác minh cùng EdgeFace/preprocessing; cần tạo lại enrollment server và trả metadata pipeline')
@@ -66,8 +72,9 @@ def load_known_embeddings(api_client):
     return known
 
 
-def infer_faces(frame, detector, recognizer, decision, known_embeddings, api_client,
+def infer_faces(frame, detector, recognizer, decision, known_embeddings, record_event,
                 attendance_enabled=False):
+    """record_event(event): ghi sự kiện bền vững (LocalStore) — chỉ gọi khi attendance_enabled."""
     annotations = []
     for face in detector.detect(frame, detect_width=config.DETECT_WIDTH):
         x, y, w, h = face[:4].astype(int)
@@ -90,10 +97,16 @@ def infer_faces(frame, detector, recognizer, decision, known_embeddings, api_cli
                     if decision.should_send(user_code):
                         event_type = decision.next_event_type(user_code)
                         event = decision.build_event(config.DEVICE_ID, user_code, event_type, score)
-                        api_client.send_event_async(event)
-                        decision.mark_sent(user_code, event_type)
-                        status = "sent"
-                        label = f"{entry['full_name']} ({'Vào' if event_type == 'check_in' else 'Ra'})"
+                        try:
+                            record_event(event)
+                        except Exception:
+                            # Không ghi được xuống đĩa: không đảo trạng thái, lần sau thử lại.
+                            logger.exception("Không ghi được sự kiện %s xuống SQLite", event["event_id"])
+                            status = "record_failed"
+                        else:
+                            decision.mark_sent(user_code, event_type)
+                            status = "sent"
+                            label = f"{entry['full_name']} ({'Vào' if event_type == 'check_in' else 'Ra'})"
                     else:
                         status = "cooldown"
         annotations.append({
@@ -158,32 +171,62 @@ def main(argv=None):
                     backend=args.camera_backend, camera_index=config.CAMERA_INDEX)
     api_client = ApiClient(config.SERVER_BASE_URL, device_key=config.EDGE_DEVICE_KEY,
                            timeout=config.HTTP_TIMEOUT_SECONDS)
-    server = None
+    attendance = not args.live_test
+    server = store = sync = None
     stream_thread = refresh_thread = None
-    api_started = False
     stop_refresh = threading.Event()
-    cache = {"entries": []}
+    refresh_now = threading.Event()
+    cache = {"entries": [], "version": None}
+
+    def apply_face_data(raw, pipeline, version, source):
+        entries = parse_face_data(raw, pipeline)
+        cache["entries"] = entries  # Kể cả rỗng hợp lệ: không giữ người đã xóa.
+        cache["version"] = version
+        state.known_embeddings_count = len(entries)
+        state.enrollment_status = "ready" if entries else "empty"
+        state.enrollment_source = source
+        state.face_data_version = version
+        return entries
 
     def refresh_embeddings():
-        # GET có thể timeout; chạy nền để không chặn capture/inference/video.
+        # Tải face-data chạy nền (GET có thể timeout). Dùng ETag: không đổi thì server
+        # trả 304, không tải lại. Attendance mode lưu bản mới vào SQLite để lần khởi
+        # động sau vẫn nhận diện được khi mất mạng.
         while not stop_refresh.is_set():
             try:
-                fresh = load_known_embeddings(api_client)
+                raw = api_client.get_face_data(if_version=cache["version"])
                 state.server_reachable = api_client.server_reachable
-                if api_client.server_reachable:
-                    cache["entries"] = fresh  # Kể cả cache rỗng hợp lệ: không giữ người đã xóa.
-                    state.known_embeddings_count = len(fresh)
-                    state.enrollment_status = "ready" if fresh else "empty"
-                    logger.info("Đã tải %d embeddings hợp lệ từ backend", len(fresh))
+                if raw is None:
+                    state.enrollment_status = "ready" if cache["entries"] else "empty"
+                elif api_client.server_reachable:
+                    pipeline, version = api_client.face_data_pipeline, api_client.face_data_version
+                    entries = apply_face_data(raw, pipeline, version, "server")
+                    if store is not None:
+                        store.save_face_data(raw, pipeline, version)
+                    logger.info("Đã tải %d embeddings hợp lệ từ backend (version %s)", len(entries), version)
                 else:
-                    state.enrollment_status = "unavailable"
-                    logger.warning("Enrollment chưa tải được; giữ cache RAM gần nhất (%d)", len(cache["entries"]))
+                    state.enrollment_status = "offline_cache" if cache["entries"] else "unavailable"
+                    logger.warning("Không tải được enrollment; dùng cache gần nhất (%d)", len(cache["entries"]))
             except Exception:
-                state.server_reachable = False
-                state.enrollment_status = "unavailable"
+                state.enrollment_status = "offline_cache" if cache["entries"] else "unavailable"
                 logger.exception("Không đọc được dữ liệu enrollment")
-            if stop_refresh.wait(max(1, config.FACE_DATA_REFRESH_SECONDS)):
-                break
+            refresh_now.wait(max(1, config.FACE_DATA_REFRESH_SECONDS))
+            refresh_now.clear()
+
+    def record_event(event):
+        store.record_event(event)
+        sync.notify()
+
+    def sync_health():
+        counts = store.event_counts()
+        return {
+            "server_reachable": api_client.server_reachable,
+            "events_pending": counts["pending"],
+            "events_rejected": counts["rejected"],
+            "last_sync_at": (time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(sync.last_sync_at))
+                             if sync.last_sync_at else None),
+            "last_sync_error": sync.last_sync_error,
+        }
 
     try:
         server = build_stream_server(state, args.host, args.port)
@@ -191,7 +234,7 @@ def main(argv=None):
         stream_thread.start()
         detector = FaceDetector(config.DETECTOR_MODEL_PATH, score_threshold=config.DETECTION_SCORE_THRESHOLD)
         # Live test không gửi crop mặt sang remote embedding service.
-        if not args.live_test and config.EMBEDDING_BACKEND == "remote":
+        if attendance and config.EMBEDDING_BACKEND == "remote":
             recognizer = RemoteFaceRecognizer(config.AI_SERVICE_URL, timeout=config.HTTP_TIMEOUT_SECONDS)
         else:
             recognizer = FaceRecognizer(config.RECOGNIZER_MODEL_PATH)
@@ -200,10 +243,38 @@ def main(argv=None):
         state.recognizer_runtime = recognizer.runtime
         state.recognizer_alignment = 'similarity5' if config.RECOGNIZER_PROFILE == 'edgeface' else 'affine3'
         decision = AttendanceDecision(config.SIMILARITY_THRESHOLD, config.ATTENDANCE_COOLDOWN_SECONDS)
-        if not args.live_test:
-            api_client.start()
-            api_started = True
-            decision.seed_last_state(api_client.get_last_state())
+
+        if attendance:
+            os.makedirs(os.path.dirname(os.path.abspath(config.EDGE_DB_PATH)), exist_ok=True)
+            store = LocalStore(config.EDGE_DB_PATH)
+            pruned = store.prune_rejected(config.REJECTED_RETENTION_DAYS)
+            if pruned:
+                logger.info("Đã xoá %d sự kiện bị từ chối cũ hơn %d ngày", pruned, config.REJECTED_RETENTION_DAYS)
+            # Trạng thái vào/ra: SQLite cục bộ là nguồn chính; chỉ mồi từ server lần đầu.
+            if not store.last_states():
+                store.seed_states(api_client.get_last_state(), api_client.last_state_times)
+            decision.seed_last_state(store.last_states(), store.last_state_days())
+            cached = store.load_face_data()
+            if cached is not None:
+                try:
+                    entries = apply_face_data(cached["data"], cached["pipeline"], cached["version"], "cache")
+                    logger.info("Đã nạp %d embeddings từ cache SQLite (tải lúc %s)", len(entries), cached["fetched_at"])
+                except ValueError as exc:
+                    logger.warning("Bỏ qua cache khuôn mặt không khớp model hiện tại: %s", exc)
+            sync = SyncService(
+                store, api_client, config.DEVICE_ID,
+                batch_size=config.SYNC_BATCH_SIZE,
+                retry_min=config.SYNC_RETRY_MIN_SECONDS, retry_max=config.SYNC_RETRY_MAX_SECONDS,
+                heartbeat_seconds=config.HEARTBEAT_SECONDS,
+                status_provider=lambda: {k: v for k, v in state.to_health_dict().items()
+                                         if k in ("status", "camera_status", "recognizer_model",
+                                                  "known_embeddings_count", "inference_errors", "uptime_seconds")},
+                face_data_version=lambda: cache["version"],
+                on_face_data_changed=refresh_now.set,
+            )
+            state.extra_health = sync_health
+            sync.start()
+
         local_file = None
         if args.live_test and not args.server_enrollment:
             local_file = args.enrollment_file or (DEFAULT_ENROLLMENT_FILE if DEFAULT_ENROLLMENT_FILE.exists() else None)
@@ -253,7 +324,7 @@ def main(argv=None):
                 started = time.perf_counter()
                 try:
                     annotations = infer_faces(frame, detector, recognizer, decision, cache["entries"],
-                                              api_client, attendance_enabled=not args.live_test)
+                                              record_event, attendance_enabled=attendance)
                     state.inference_count += 1
                     state.faces_detected_total += len(annotations)
                     state.embeddings_generated_total += sum(
@@ -287,13 +358,16 @@ def main(argv=None):
     finally:
         # Cả lỗi load model, lỗi inference, SIGINT/SIGTERM đều đi qua đây.
         stop_refresh.set()
+        refresh_now.set()
         state.camera_opened = False
         state.stop()
         try:
             camera.release()
         finally:
-            if api_started:
-                api_client.stop()
+            if sync is not None:
+                sync.stop()
+            if store is not None:
+                store.close()
             if refresh_thread is not None:
                 refresh_thread.join(timeout=1)
             if server is not None:
